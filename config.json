@@ -1,0 +1,50 @@
+{
+  "raspberry_pi": {
+    "use_physical_buttons": true,
+    "button_pins": {
+      "1": 4,
+      "2": 17,
+      "3": 27,
+      "4": 22,
+      "5": 5,
+      "6": 6,
+      "7": 13,
+      "8": 19,
+      "9": 26,
+      "10": 18,
+      "11": 23,
+      "12": 24,
+      "13": 25,
+      "14": 12,
+      "15": 16,
+      "16": 20,
+      "17": 21,
+      "18": 1
+    },
+    "pull_up": true,
+    "button_cooldown_seconds": 1.5
+  },
+  "timeouts": {
+    "global_timeout": 75,
+    "instrument_timeout": 60,
+    "fade_duration": 2
+  },
+  "jack": {
+    "sample_rate": 48000,
+    "buffer_size": 1024
+  },
+  "stats_server": {
+    "host": "192.168.0.191",
+    "port": 8000
+  },
+  "performance": {
+    "max_concurrent_sounds": 18,
+    "preload_sounds": true,
+    "mono_audio": true,
+    "memory_management": false
+  },
+  "audio": {
+    "output_device": null,
+    "max_loop_length": 180
+  }
+}
