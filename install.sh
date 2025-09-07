@@ -9,7 +9,7 @@ set -e
 
 # Globálne premenné
 SERVICE_NAME="audio_looper.service"
-PROJECT_DIR="/home/admin/Documents/audio_loop_system"
+PROJECT_DIR="/home/admin/Documents/audio-loop-system"
 SERVICE_FILE="$HOME/.config/systemd/user/$SERVICE_NAME"
 PYTHON_EXECUTABLE="/usr/bin/python3"
 USER_NAME="admin"

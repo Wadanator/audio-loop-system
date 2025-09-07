@@ -24,6 +24,23 @@
     "pull_up": true,
     "button_cooldown_seconds": 1.5
   },
+  "debouncing": {
+    "debounce_time_ms": 80,
+    "min_press_duration_ms": 10,
+    "poll_interval_ms": 5,
+    "double_press_protection_ms": 1000,
+    "enable_advanced_logging": false
+  },
+  "song_rotation": {
+    "enable": true,
+    "switch_on_global_timeout": true,
+    "base_directory": "audio_files",
+    "song_folders": [
+      "song1",
+      "song2",
+      "song3"
+    ]
+  },
   "timeouts": {
     "global_timeout": 75,
     "instrument_timeout": 60,
@@ -31,7 +48,7 @@
   },
   "jack": {
     "sample_rate": 48000,
-    "buffer_size": 1024
+    "buffer_size": 2048
   },
   "stats_server": {
     "host": "192.168.0.191",
@@ -40,8 +57,8 @@
   "performance": {
     "max_concurrent_sounds": 18,
     "preload_sounds": true,
-    "mono_audio": true,
-    "memory_management": false
+    "mono_audio": false,
+    "memory_management": true
   },
   "audio": {
     "output_device": null,

@@ -15,14 +15,14 @@ echo "Spúšťam robustný reset služby: $SERVICE_NAME"
 if systemctl --user is-active --quiet $SERVICE_NAME; then
     echo "Služba je aktívna. Pokúšam sa ju zastaviť..."
     systemctl --user stop $SERVICE_NAME
-    sleep 5 # Pauza na korektné ukončenie
+    sleep 1 # Pauza na korektné ukončenie
 fi
 
 # Krok 2: Overenie, či sa proces zastavil, a prípadné násilné ukončenie
 if systemctl --user is-active --quiet $SERVICE_NAME; then
     echo "UPOZORNENIE: Služba stále beží po pokuse o zastavenie. Násilne ukončujem proces."
     # Nájdenie PID a jeho násilné ukončenie
-    PID=$(pgrep -f "python3 /home/admin/Documents/audio_loop_system/main.py")
+    PID=$(pgrep -f "python3 /home/admin/Documents/audio-loop-system/main.py")
     if [ ! -z "$PID" ]; then
         echo "Nájdený PID: $PID. Posielam príkaz SIGKILL."
         kill -9 "$PID"
@@ -48,7 +48,7 @@ set -e
 systemctl --user start $SERVICE_NAME
 
 # Krok 5: Krátka pauza a overenie stavu
-sleep 3
+sleep 1
 echo ""
 echo "=== STATUS SLUŽBY PO REŠTARTE ==="
 if systemctl --user is-active --quiet $SERVICE_NAME; then
