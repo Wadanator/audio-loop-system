@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Audio Looper System - Enhanced Version with Song Rotation
+Audio Looper System - SD Card Optimized Version
+Minimalizuje zápisy na SD kartu pre dlhšiu životnosť
 """
 import sys
 import os
@@ -14,16 +15,16 @@ from audio_manager import AudioManager
 from button_handler import UniversalButtonHandler
 from looper_engine import LooperEngine
 from stats_server import run_stats_server
+from stats_collector import StatsCollector
 from logging_setup import setup_logging
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
 class AudioLooper:
-    """The main application class for the audio looper system with song rotation."""
+    """Hlavná trieda optimalizovaná pre šetrenie SD karty."""
     
     def __init__(self):
-        """Initializes the main application components."""
         self._check_requirements()
         self.config = self._load_config()
         
@@ -31,27 +32,27 @@ class AudioLooper:
         self.looper_engine = None
         self.button_handler = None
         self.stats_server_thread = None
+        self.stats_collector = None
         
         self.running = False
+        
+        # Pre SD optimalizáciu
+        self.last_status_log = 0
+        self.status_log_interval = 600  # Status iba každých 10 minút
         
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
         
-        # Initialize components in a separate method to handle setup failures
         self._initialize_components()
 
     def _check_requirements(self):
-        """
-        Checks for required files and directories.
-        Supports both old format (audio_files/*.wav) and new format (audio_files/song*/*.wav)
-        """
+        """Kontrola potrebných súborov - minimálne logovania."""
         if not os.path.exists("config.json"):
             raise FileNotFoundError("config.json required but not found")
         
         if not os.path.exists("audio_files"):
             raise FileNotFoundError("audio_files/ directory required but not found")
         
-        # Load config to check song rotation settings
         try:
             with open("config.json", 'r') as f:
                 config = json.load(f)
@@ -61,14 +62,12 @@ class AudioLooper:
         song_rotation_config = config.get('song_rotation', {})
         
         if song_rotation_config.get('enable', False):
-            # NEW FORMAT: Check song folders
             self._check_song_folders(config)
         else:
-            # OLD FORMAT: Check direct .wav files
             self._check_direct_wav_files()
 
     def _check_song_folders(self, config):
-        """Checks the new song folder structure."""
+        """Kontrola štruktúry song priečinkov."""
         song_config = config.get('song_rotation', {})
         base_dir = song_config.get('base_directory', 'audio_files')
         song_folders = song_config.get('song_folders', ['song1'])
@@ -85,46 +84,28 @@ class AudioLooper:
                 wav_files = [f for f in os.listdir(song_path) if f.endswith('.wav')]
                 if wav_files:
                     found_valid_songs = True
-                    logger.info(f"Found song folder '{song_name}' with {len(wav_files)} .wav files")
         
         if not found_valid_songs:
-            raise FileNotFoundError(
-                f"No valid song folders found!\n"
-                f"Expected structure:\n"
-                f"  {base_dir}/\n" + 
-                "".join([f"  ├── {song}/\n  │   ├── 1.wav\n  │   ├── 2.wav\n  │   └── ...\n" 
-                        for song in song_folders[:2]]) +
-                f"For configured songs: {song_folders}"
-            )
+            raise FileNotFoundError(f"No valid song folders found!")
 
     def _check_direct_wav_files(self):
-        """Checks the old direct .wav files structure."""
+        """Kontrola priamych .wav súborov."""
         wav_files = [f for f in os.listdir("audio_files") if f.endswith('.wav')]
         if not wav_files:
-            raise FileNotFoundError(
-                "No .wav files found in audio_files/ directory\n"
-                "For song rotation, enable it in config.json and create song folders:\n"
-                "  audio_files/song1/1.wav, audio_files/song1/2.wav, etc.\n"
-                "For single song mode, place files directly:\n"
-                "  audio_files/1.wav, audio_files/2.wav, etc."
-            )
+            raise FileNotFoundError("No .wav files found in audio_files/ directory")
 
     def _load_config(self) -> dict:
-        """Loads the configuration from a JSON file."""
+        """Načíta konfiguráciu zo súboru."""
         with open("config.json", 'r') as f:
             return json.load(f)
 
     def _initialize_components(self):
-        """Initializes all system components and handles potential setup errors."""
+        """Inicializuje komponenty systému."""
         try:
-            # Log configuration info
             song_rotation = self.config.get('song_rotation', {})
-            if song_rotation.get('enable', False):
-                logger.info(f"Song rotation ENABLED - Songs: {song_rotation.get('song_folders', [])}")
-            else:
-                logger.info("Song rotation DISABLED - Using direct audio files")
             
             self.audio_manager = AudioManager(self.config)
+            self.stats_collector = StatsCollector()  # Nová optimalizovaná verzia
             self.looper_engine = LooperEngine(self.audio_manager, self.config)
             self.button_handler = UniversalButtonHandler(
                 self.looper_engine.handle_button_press, 
@@ -136,61 +117,65 @@ class AudioLooper:
                 daemon=True
             )
         except Exception as e:
-            logger.critical(f"Critical component initialization failed: {e}", exc_info=True)
+            logger.error(f"Critical component initialization failed: {e}")
             self.shutdown(exit_code=1)
 
     def _signal_handler(self, signum, frame):
-        """Handles termination signals for a graceful shutdown."""
-        logger.info(f"Received signal {signum}, initiating shutdown.")
+        """Spracováva signály pre graceful shutdown."""
+        logger.error(f"Received signal {signum}, initiating shutdown.")
         self.shutdown()
 
     def run(self):
-        """Starts the main application loop."""
-        logger.info("Starting Enhanced Audio Looper System")
+        """Spúšťa hlavnú aplikačnú slučku."""
+        logger.error("Starting SD-Optimized Audio Looper System")
         
         try:
-            # Log initial system status
             if hasattr(self.audio_manager, 'get_current_song_info'):
                 song_info = self.audio_manager.get_current_song_info()
-                logger.info(f"Initial song: {song_info['name']} "
-                           f"({len(song_info['available_instruments'])} instruments, "
-                           f"{song_info['duration_seconds']:.1f}s duration)")
+                logger.error(f"Initial song: {song_info['name']}")  # ERROR level pre startup log
             
             self.looper_engine.start()
             self.button_handler.start()
             self.stats_server_thread.start()
             self.running = True
             
-            # Main loop with periodic status logging
-            last_status_log = 0
+            # Hlavná slučka s minimálnym logovaním
+            loop_counter = 0
             while self.running:
                 current_time = time.time()
+                loop_counter += 1
                 
-                # Log status every 60 seconds if system is active
-                if (current_time - last_status_log) > 60:
+                # Periodické ukladanie stats (každých 5 minút)
+                if loop_counter % 300 == 0:  # Každých 300 sekúnd
+                    if hasattr(self.stats_collector, 'periodic_save'):
+                        self.stats_collector.periodic_save()
+                
+                # Status log iba každých 10 minút ak je systém aktívny
+                if (current_time - self.last_status_log) > self.status_log_interval:
                     if hasattr(self.looper_engine, 'get_system_status'):
                         status = self.looper_engine.get_system_status()
                         if status['system_active']:
-                            logger.info(f"System active - Song: {status['current_song']['name']}, "
-                                       f"Session: {status['session_duration']:.0f}s, "
+                            logger.error(f"System active - Song: {status['current_song']['name']}, "
                                        f"Active instruments: {len(status['active_instruments'])}")
-                    last_status_log = current_time
+                    self.last_status_log = current_time
                 
                 time.sleep(1)
                 
         except Exception as e:
-            logger.critical(f"Fatal error in main loop: {e}", exc_info=True)
+            logger.error(f"Fatal error in main loop: {e}")
             self.shutdown(exit_code=1)
             
     def shutdown(self, exit_code: int = 0):
-        """
-        Safely shuts down all system components.
-
-        Args:
-            exit_code (int): The exit code to use when shutting down.
-        """
-        logger.info("Shutting down Enhanced Audio Looper System...")
+        """Bezpečne vypína všetky komponenty systému."""
+        logger.error("Shutting down SD-Optimized Audio Looper System...")
         self.running = False
+        
+        # Dôležité: ulož štatistiky pred vypnutím
+        if hasattr(self, 'stats_collector') and self.stats_collector:
+            try:
+                self.stats_collector.force_save()
+            except Exception as e:
+                logger.error(f"Failed to save stats on shutdown: {e}")
         
         if hasattr(self, 'button_handler') and self.button_handler:
             self.button_handler.stop()
@@ -199,25 +184,20 @@ class AudioLooper:
         if hasattr(self, 'audio_manager') and self.audio_manager:
             self.audio_manager.shutdown()
         
-        logger.info("Shutdown complete.")
+        logger.error("Shutdown complete.")
         sys.exit(exit_code)
 
 def main():
-    """Main function to start the application."""
+    """Hlavná funkcia na spustenie aplikácie."""
     try:
         app = AudioLooper()
         app.run()
     except FileNotFoundError as e:
         print(f"\n❌ SETUP ERROR:")
         print(f"{e}")
-        print(f"\n🔧 QUICK FIX:")
-        print(f"1. Create audio files in the correct structure")
-        print(f"2. Or disable song_rotation in config.json")
-        print(f"3. Check the logs/ directory for more details")
         sys.exit(1)
     except Exception as e:
         print(f"\n❌ CRITICAL ERROR: {e}")
-        print(f"Check the logs/ directory for detailed error information")
         sys.exit(1)
 
 if __name__ == "__main__":

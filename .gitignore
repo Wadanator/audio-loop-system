@@ -1,31 +1,32 @@
-# Python
+# Logs a dočasné súbory
+logs/
+*.log
+*.tmp
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
-.Python
-env/
-venv/
-ENV/
-*.egg-info/
-dist/
-build/
+
+# Štatistiky
 stats.json
 
-# Logs
-logs/
-*.log
+# Audio súbory (môžu byť veľké)
+audio_files/*.wav
+audio_files/song*/*.wav
 
-# Audio files
+# Backup súbory
+*.backup
+*.bak
 
-# System files
+# OS súbory
 .DS_Store
 Thumbs.db
 
-# IDE files
-.vscode/
-.idea/
+# Editor súbory
+*.swp
+*.swo
+*~
 
-# Virtual environment
-*.venv
-```
+# Systemd súbory (lokálne)
+*.service.local
