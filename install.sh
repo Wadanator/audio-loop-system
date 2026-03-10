@@ -37,12 +37,12 @@ sudo apt install -y python3-pygame python3-numpy python3-rpi.gpio || echo "Some 
 # For packages not available via apt, use pip with --break-system-packages
 echo "Installing remaining packages via pip..."
 if command -v pip3 &> /dev/null; then
-    pip3 install --user --break-system-packages sounddevice soundfile || {
+    pip3 install --user --break-system-packages sounddevice soundfile sdnotify || {
         echo "Trying alternative installation method..."
-        python3 -m pip install --user --break-system-packages sounddevice soundfile
+        python3 -m pip install --user --break-system-packages sounddevice soundfile sdnotify
     }
 else
-    python3 -m pip install --user --break-system-packages sounddevice soundfile
+    python3 -m pip install --user --break-system-packages sounddevice soundfile sdnotify
 fi
 
 echo "✅ Python dependencies installed"
@@ -84,17 +84,27 @@ SERVICE_FILE="$HOME/.config/systemd/user/$SERVICE_NAME"
 cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=Audio Looper System
-After=sound.target
+# FIX P5: Závislosť aj na sieti (stats server), nielen zvuku
+After=sound.target network.target
+# FIX P5: Ochrana pred nekonečnou reštart slučkou
+# Ak service padne viac ako 5x za 120s, systemd ho zastaví
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
-Type=simple
+# FIX P5: Type=notify umožňuje systemd watchdog a READY=1 signalizáciu
+Type=notify
 ExecStart=/usr/bin/python3 $CURRENT_DIR/main.py
 WorkingDirectory=$CURRENT_DIR
 Restart=on-failure
-RestartSec=5
+# FIX P5: Dlhší restart delay – dáva čas audiohardvéru na inicializáciu
+RestartSec=10
 KillSignal=SIGTERM
 TimeoutStopSec=30
 Environment=PYTHONUNBUFFERED=1
+# FIX P5: Watchdog – ak Python kód neodpovie do 60s, service sa reštartuje
+# Vyžaduje sdnotify knižnicu (nainštalovanú vyššie) a WATCHDOG=1 ping z main.py
+WatchdogSec=60
 
 [Install]
 WantedBy=default.target

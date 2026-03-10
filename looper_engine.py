@@ -1,67 +1,93 @@
 # looper_engine.py
+"""Looper engine: business logic, timeout management, and song rotation."""
+
 import logging
 import time
 import threading
+
 from audio_manager import AudioManager
 from stats_collector import StatsCollector
 
+
 logger = logging.getLogger(__name__)
 
+
 class LooperEngine:
+    """Controls playback logic, dual-timer timeouts, and song rotation.
+
+    Automatically advances to the next song when the global inactivity
+    timeout expires. Runs its own background thread for timer checks.
     """
-    Enhanced looper engine with song rotation support.
-    Automatically switches songs when global timeout expires.
-    """
-    
-    def __init__(self, audio_manager: AudioManager, config: dict):
-        """
-        Initializes the looper engine with song rotation.
+
+    def __init__(
+        self,
+        audio_manager: AudioManager,
+        config: dict,
+        stats_collector: StatsCollector
+    ):
+        """Initialize the looper engine.
 
         Args:
-            audio_manager (AudioManager): The audio manager instance.
-            config (dict): The configuration dictionary.
+            audio_manager: Shared ``AudioManager`` instance for playback
+                control.
+            config: Application configuration dictionary.
+            stats_collector: Shared ``StatsCollector`` instance. Injected
+                from the caller so that a single object is used throughout
+                the application (no duplicate counters).
         """
         self.audio_manager = audio_manager
-        self.stats_collector = StatsCollector()
+        # Receive the shared instance rather than creating a duplicate.
+        self.stats_collector = stats_collector
         self.config = config
 
-        # Timeout configuration
+        # Timeout values loaded from configuration.
         self.global_timeout = self.config['timeouts']['global_timeout']
         self.instrument_timeout = self.config['timeouts']['instrument_timeout']
         self.fade_duration = self.config['timeouts']['fade_duration']
-        self.button_cooldown_seconds = self.config.get('raspberry_pi', {}).get('button_cooldown_seconds', 0.8)
+        self.button_cooldown_seconds = (
+            self.config.get('raspberry_pi', {})
+            .get('button_cooldown_seconds', 0.8)
+        )
 
-        # Song rotation configuration
+        # Song rotation settings.
         self.song_rotation_config = self.config.get('song_rotation', {})
-        self.enable_song_rotation = self.song_rotation_config.get('enable', True)
-        self.song_switch_on_timeout = self.song_rotation_config.get('switch_on_global_timeout', True)
-        
-        # System state
+        self.enable_song_rotation = self.song_rotation_config.get(
+            'enable', True
+        )
+        self.song_switch_on_timeout = self.song_rotation_config.get(
+            'switch_on_global_timeout', True
+        )
+
+        # System-wide playback state.
         self.system_active = False
         self.running = False
         self.instrument_active = {i: False for i in range(1, 19)}
-        
-        # Timing state
+
+        # Per-instrument and global expiry timestamps.
         self.global_expiry_time = 0
         self.instrument_expiry_times = {i: 0 for i in range(1, 19)}
         self.last_press_times = {i: 0 for i in range(1, 19)}
 
-        # Song rotation tracking
+        # Session statistics.
         self.session_start_time = 0
         self.total_sessions = 0
-        
-        self.logic_thread = threading.Thread(target=self._logic_loop, daemon=True)
+
+        self.logic_thread = threading.Thread(
+            target=self._logic_loop, daemon=True
+        )
 
     def start(self):
-        """Starts the main logic loop."""
+        """Start the background logic loop thread."""
         if self.running:
             return
         self.running = True
         self.logic_thread.start()
-        logger.info("Enhanced Looper Engine with song rotation started.")
+        logger.info(
+            "Enhanced Looper Engine with song rotation started."
+        )
 
     def shutdown(self):
-        """Safely shuts down the engine."""
+        """Stop the logic loop and deactivate the system if it is running."""
         logger.info("Shutting down Enhanced Looper Engine.")
         self.running = False
         if self.system_active:
@@ -71,143 +97,175 @@ class LooperEngine:
         logger.info("Enhanced Looper Engine stopped.")
 
     def handle_button_press(self, instrument_num: int):
-        """
-        Processes a button press with song rotation awareness.
+        """Process a single button press event.
+
+        Activates the system on the first press when idle, resets the
+        global timer on every press, and toggles the target instrument.
 
         Args:
-            instrument_num (int): The number of the instrument button pressed.
+            instrument_num: Instrument number corresponding to the pressed
+                button (1–18).
         """
         current_time = time.time()
-        
-        # Button cooldown check
-        if (current_time - self.last_press_times.get(instrument_num, 0)) < self.button_cooldown_seconds:
-            logger.debug(f"Ignoring rapid press for instrument {instrument_num}. Cooldown active.")
+
+        # Reject presses that arrive within the cooldown window.
+        if ((current_time - self.last_press_times.get(instrument_num, 0))
+                < self.button_cooldown_seconds):
+            logger.debug(
+                f"Ignoring rapid press for instrument {instrument_num}. "
+                f"Cooldown active."
+            )
             return
 
         self.last_press_times[instrument_num] = current_time
-        
+
         if not 1 <= instrument_num <= 18:
-            logger.warning(f"Invalid instrument number received: {instrument_num}")
+            logger.warning(
+                f"Invalid instrument number received: {instrument_num}"
+            )
             return
-        
-        # System activation
+
+        # Activate the system on the first button press from idle state.
         if not self.system_active:
             success = self._activate_system(restart_song=True)
             if not success:
                 logger.error("Failed to activate system")
                 return
 
-        # Reset global timer
+        # Any valid press resets the global inactivity timer.
         self.global_expiry_time = time.time() + self.global_timeout
-        logger.debug(f"Global timer reset. Expires in {self.global_timeout}s.")
+        logger.debug(
+            f"Global timer reset. Expires in {self.global_timeout}s."
+        )
 
-        # Handle instrument toggle
+        # Toggle the pressed instrument on or off.
         if self.instrument_active[instrument_num]:
             self._deactivate_instrument(instrument_num)
         else:
             if instrument_num in self.audio_manager.get_available_instruments():
                 self._activate_instrument(instrument_num)
                 self.stats_collector.record_instrument(instrument_num)
-                
-                # Log current song info for stats
+
                 song_info = self.audio_manager.get_current_song_info()
-                logger.debug(f"Instrument {instrument_num} activated in song '{song_info['name']}'")
+                logger.debug(
+                    f"Instrument {instrument_num} activated in song "
+                    f"'{song_info['name']}'"
+                )
             else:
-                current_song = self.audio_manager.get_current_song_info()['name']
-                logger.warning(f"Instrument {instrument_num} not available in song '{current_song}' (no audio file).")
+                current_song = (
+                    self.audio_manager.get_current_song_info()['name']
+                )
+                logger.warning(
+                    f"Instrument {instrument_num} not available in song "
+                    f"'{current_song}' (no audio file)."
+                )
 
     def _activate_system(self, restart_song: bool = False) -> bool:
-        """
-        Activates the entire system with song rotation support.
+        """Start audio playback and initialize session tracking.
 
         Args:
-            restart_song (bool): If True, restarts playback from the beginning.
+            restart_song: If True, reset the playback position to the
+                beginning before starting.
 
         Returns:
-            bool: True if activation was successful, False otherwise.
+            True if activation succeeded, False otherwise.
         """
         current_song = self.audio_manager.get_current_song_info()['name']
         logger.info(f"Activating system with song: {current_song}")
-        
+
         success = False
         if restart_song:
             success = self.audio_manager.restart_from_beginning()
         else:
             success = self.audio_manager.start_master_playback()
-        
+
         if success:
             self.system_active = True
             self.global_expiry_time = time.time() + self.global_timeout
             self.session_start_time = time.time()
             self.total_sessions += 1
-            
+
             song_info = self.audio_manager.get_current_song_info()
-            logger.info(f"System activated - Song: {song_info['name']} "
-                       f"({song_info['index'] + 1}/{song_info['total_songs']}), "
-                       f"Session #{self.total_sessions}")
+            logger.info(
+                f"System activated - Song: {song_info['name']} "
+                f"({song_info['index'] + 1}/{song_info['total_songs']}), "
+                f"Session #{self.total_sessions}"
+            )
         else:
             logger.error("Failed to activate audio system")
-        
+
         return success
 
     def _deactivate_system(self):
-        """Deactivates the system and handles song rotation."""
-        session_duration = time.time() - self.session_start_time if self.session_start_time > 0 else 0
+        """Stop playback, reset all instrument states, and trigger rotation."""
+        session_duration = (
+            time.time() - self.session_start_time
+            if self.session_start_time > 0 else 0
+        )
         current_song_info = self.audio_manager.get_current_song_info()
-        
-        logger.info(f"Global timeout reached. Session duration: {session_duration:.1f}s, "
-                   f"Song was: {current_song_info['name']}")
-        
-        # Stop current playback
+
+        logger.info(
+            f"Global timeout reached. Session duration: "
+            f"{session_duration:.1f}s, Song was: "
+            f"{current_song_info['name']}"
+        )
+
         self.audio_manager.stop_master_playback()
         self.system_active = False
         self.instrument_active = {i: False for i in range(1, 19)}
         self.instrument_expiry_times = {i: 0 for i in range(1, 19)}
-        
-        # Handle song rotation
+
+        # Advance to the next song if rotation is enabled.
         if self.enable_song_rotation and self.song_switch_on_timeout:
             self._handle_song_rotation()
 
     def _handle_song_rotation(self):
-        """Handles automatic song switching after system deactivation."""
+        """Advance to the next song after the current session ends."""
         try:
             old_song = self.audio_manager.get_current_song_info()['name']
             new_song = self.audio_manager.switch_to_next_song()
-            
+
             if old_song != new_song:
-                logger.info(f"Song rotation: {old_song} → {new_song}")
-                
-                # Log rotation stats
+                logger.info(f"Song rotation: {old_song} -> {new_song}")
+
                 song_info = self.audio_manager.get_current_song_info()
-                logger.info(f"Next session will use: {song_info['name']} "
-                           f"({song_info['index'] + 1}/{song_info['total_songs']} songs)")
+                logger.info(
+                    f"Next session will use: {song_info['name']} "
+                    f"({song_info['index'] + 1}/"
+                    f"{song_info['total_songs']} songs)"
+                )
             else:
-                logger.debug("Song rotation: No change (single song or rotation disabled)")
-                
+                logger.debug(
+                    "Song rotation: No change (single song or rotation "
+                    "disabled)"
+                )
+
         except Exception as e:
             logger.error(f"Error during song rotation: {e}")
-            # Continue with current song if rotation fails
+            # Continue with the current song if loading the next one fails.
 
     def _activate_instrument(self, instrument_num: int):
-        """
-        Activates a single instrument.
+        """Fade in a single instrument and start its individual timer.
 
         Args:
-            instrument_num (int): The instrument number to activate.
+            instrument_num: Instrument number to activate (1–18).
         """
         current_song = self.audio_manager.get_current_song_info()['name']
-        logger.info(f"Activating instrument {instrument_num} (song: {current_song})")
-        
+        logger.info(
+            f"Activating instrument {instrument_num} (song: {current_song})"
+        )
+
         self.instrument_active[instrument_num] = True
-        self.instrument_expiry_times[instrument_num] = time.time() + self.instrument_timeout
+        self.instrument_expiry_times[instrument_num] = (
+            time.time() + self.instrument_timeout
+        )
         self.audio_manager.fade_in(instrument_num, self.fade_duration)
 
     def _deactivate_instrument(self, instrument_num: int):
-        """
-        Deactivates a single instrument.
+        """Fade out a single instrument and clear its timer.
 
         Args:
-            instrument_num (int): The instrument number to deactivate.
+            instrument_num: Instrument number to deactivate (1–18).
         """
         logger.info(f"Deactivating instrument {instrument_num}")
         self.instrument_active[instrument_num] = False
@@ -215,8 +273,10 @@ class LooperEngine:
         self.audio_manager.fade_out(instrument_num, self.fade_duration)
 
     def _logic_loop(self):
-        """
-        Enhanced logic loop with song rotation monitoring.
+        """Background loop that evaluates global and per-instrument timeouts.
+
+        Sleeps for 0.5 s while the system is idle and for 0.2 s while
+        active, keeping CPU usage minimal.
         """
         while self.running:
             if not self.system_active:
@@ -225,61 +285,81 @@ class LooperEngine:
 
             current_time = time.time()
 
-            # Check global timeout
+            # Deactivate the whole system if the global timer has expired.
             if current_time >= self.global_expiry_time:
                 self._deactivate_system()
                 continue
 
-            # Check instrument timeouts
+            # Fade out any instruments whose individual timers have expired.
             for i in range(1, 19):
-                if self.instrument_active[i] and current_time >= self.instrument_expiry_times[i]:
+                if (self.instrument_active[i]
+                        and current_time >= self.instrument_expiry_times[i]):
                     logger.info(f"Instrument {i} timeout - fading out.")
                     self._deactivate_instrument(i)
-            
+
             time.sleep(0.2)
 
     def force_song_switch(self) -> str:
-        """
-        Manually forces a song switch (for testing or manual control).
-        
+        """Force an immediate song switch, regardless of session state.
+
+        If the system is currently active it is deactivated first, then
+        reactivated with the new song after the switch.
+
         Returns:
-            str: Name of the new active song
+            Name of the newly active song.
+
+        Raises:
+            Exception: Propagates any exception raised by
+                ``audio_manager.switch_to_next_song()``.
         """
         logger.info("Manual song switch requested")
-        
-        # If system is active, deactivate it first
+
         was_active = self.system_active
         if self.system_active:
             self._deactivate_system()
-        
+
         try:
             new_song = self.audio_manager.switch_to_next_song()
             logger.info(f"Manual song switch completed: {new_song}")
-            
-            # If system was active, reactivate with new song
+
             if was_active:
                 self._activate_system(restart_song=True)
-            
+
             return new_song
-            
+
         except Exception as e:
             logger.error(f"Manual song switch failed: {e}")
             raise
 
     def get_system_status(self) -> dict:
-        """Returns comprehensive system status including song info."""
+        """Return a snapshot of the current system state.
+
+        Returns:
+            Dictionary containing playback state, active song info,
+            per-instrument status, session counters, and timeout values.
+        """
         song_info = self.audio_manager.get_current_song_info()
-        
-        active_instruments = [i for i in range(1, 19) if self.instrument_active[i]]
-        session_duration = time.time() - self.session_start_time if self.session_start_time > 0 else 0
-        
+
+        active_instruments = [
+            i for i in range(1, 19) if self.instrument_active[i]
+        ]
+        session_duration = (
+            time.time() - self.session_start_time
+            if self.session_start_time > 0 else 0
+        )
+
         return {
             'system_active': self.system_active,
             'current_song': song_info,
             'active_instruments': active_instruments,
-            'available_instruments': self.audio_manager.get_available_instruments(),
+            'available_instruments': (
+                self.audio_manager.get_available_instruments()
+            ),
             'session_duration': session_duration,
             'total_sessions': self.total_sessions,
-            'time_until_timeout': max(0, self.global_expiry_time - time.time()) if self.system_active else 0,
+            'time_until_timeout': (
+                max(0, self.global_expiry_time - time.time())
+                if self.system_active else 0
+            ),
             'song_rotation_enabled': self.enable_song_rotation
         }
