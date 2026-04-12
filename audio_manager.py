@@ -155,6 +155,10 @@ class AudioManager:
         Raises:
             FileNotFoundError: If the song directory does not exist.
             RuntimeError: If no audio files could be loaded.
+            ValueError: If tracks within the song have inconsistent sample
+                rates, or if the song's sample rate differs from the already
+                running audio stream (which would cause silent pitch/tempo
+                distortion).
         """
         song_dir = self._get_song_directory()
 
@@ -199,10 +203,32 @@ class AudioManager:
                 f"No audio files loaded for song '{self.current_song_name}'!"
             )
 
-        # Use the most common sample rate across all loaded files.
-        from collections import Counter
-        most_common_sr = Counter(sample_rates).most_common(1)[0][0]
-        new_sample_rate = int(most_common_sr)
+        # --- FIX P4: Sample rate consistency checks ---
+
+        # 1. All tracks within the same song must share one sample rate.
+        unique_rates = set(sample_rates)
+        if len(unique_rates) > 1:
+            raise ValueError(
+                f"Song '{self.current_song_name}' contains tracks with "
+                f"mixed sample rates: {unique_rates}. "
+                f"All WAV files in a song folder must use the same rate."
+            )
+
+        new_sample_rate = int(sample_rates[0])
+
+        # 2. The new song's sample rate must match the already-open stream.
+        #    Changing sample rate mid-run would require closing and re-opening
+        #    the OutputStream. If it differs, we log a clear error and abort
+        #    the switch so the previous song keeps playing rather than
+        #    producing silent or pitch-shifted audio with no warning.
+        if self.sample_rate is not None and new_sample_rate != self.sample_rate:
+            raise ValueError(
+                f"Song '{self.current_song_name}' has sample rate "
+                f"{new_sample_rate} Hz but the audio stream is running at "
+                f"{self.sample_rate} Hz. All songs must use the same sample "
+                f"rate, or stop/restart the stream between songs. "
+                f"Song switch aborted."
+            )
 
         # Derive loop length from the longest track.
         max_length = max(len(data) for data in temp_tracks.values())
@@ -239,7 +265,8 @@ class AudioManager:
         logger.info(
             f"Song '{self.current_song_name}' loaded: "
             f"{len(self.audio_tracks)} tracks, "
-            f"{self.loop_length_seconds:.2f}s duration"
+            f"{self.loop_length_seconds:.2f}s duration, "
+            f"{self.sample_rate}Hz"
         )
 
     def _setup_audio_device(self):
@@ -368,6 +395,12 @@ class AudioManager:
         No-op if only one song is available. Loads the new song and
         resets the playback position before releasing the switch lock.
 
+        If the new song has a different sample rate than the current stream,
+        ``_load_current_song`` will raise ``ValueError`` and the switch is
+        aborted: the index is rolled back so the next rotation attempt
+        tries the same song again (it won't succeed either, but at least
+        the system stays consistent and logs a clear error).
+
         Returns:
             Name of the newly active song.
 
@@ -388,6 +421,7 @@ class AudioManager:
                 self.target_volumes[i] = 0.0
 
             # Advance the index cyclically through the song list.
+            previous_index = self.current_song_index
             self.current_song_index = (
                 (self.current_song_index + 1) % len(self.available_songs)
             )
@@ -402,12 +436,18 @@ class AudioManager:
             )
 
             try:
-                # _load_current_song performs an atomic swap under audio_data_lock.
+                # _load_current_song performs an atomic swap under
+                # audio_data_lock. It also validates sample rate consistency
+                # and raises ValueError if the new song cannot be used with
+                # the current stream.
                 self._load_current_song()
 
                 self.master_position = 0
 
-                # Re-check device settings in case the sample rate changed.
+                # _setup_audio_device updates sd.default.* for the NEXT
+                # stream open. The currently running stream is unaffected,
+                # which is correct because _load_current_song already
+                # verified the sample rate matches.
                 self._setup_audio_device()
 
                 self.song_switch_pending = False
@@ -419,6 +459,11 @@ class AudioManager:
                 logger.error(
                     f"Failed to switch to song "
                     f"'{self.current_song_name}': {e}"
+                )
+                # Roll back index so the system stays on the previous song.
+                self.current_song_index = previous_index
+                self.current_song_name = (
+                    self.available_songs[previous_index]
                 )
                 self.song_switch_pending = False
                 raise

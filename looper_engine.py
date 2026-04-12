@@ -72,6 +72,25 @@ class LooperEngine:
         self.session_start_time = 0
         self.total_sessions = 0
 
+        # --- FIX P1 + P3 ---
+        # Single lock that serialises every state-changing operation:
+        # handle_button_press, _activate_system, _deactivate_system.
+        #
+        # Why one lock instead of two separate ones:
+        #   - _activate_system and _deactivate_system both touch
+        #     system_active, audio_manager, and instrument_active.
+        #   - Using two different locks would risk deadlock or still
+        #     allow interleaving between activate and deactivate.
+        #   - handle_button_press already holds this lock when it calls
+        #     _activate_system, so _logic_loop (which also calls
+        #     _deactivate_system) will block until the press is fully
+        #     processed before it can deactivate.
+        #
+        # _logic_loop acquires the lock only for the deactivate call,
+        # so the 200 ms sleep between checks is NOT held under the lock
+        # and audio playback is never blocked.
+        self._state_lock = threading.Lock()
+
         self.logic_thread = threading.Thread(
             target=self._logic_loop, daemon=True
         )
@@ -90,8 +109,9 @@ class LooperEngine:
         """Stop the logic loop and deactivate the system if it is running."""
         logger.info("Shutting down Enhanced Looper Engine.")
         self.running = False
-        if self.system_active:
-            self._deactivate_system()
+        with self._state_lock:
+            if self.system_active:
+                self._deactivate_system()
         if self.logic_thread.is_alive():
             self.logic_thread.join(timeout=1.0)
         logger.info("Enhanced Looper Engine stopped.")
@@ -99,8 +119,10 @@ class LooperEngine:
     def handle_button_press(self, instrument_num: int):
         """Process a single button press event.
 
-        Activates the system on the first press when idle, resets the
-        global timer on every press, and toggles the target instrument.
+        Acquires ``_state_lock`` for the full duration so that two
+        simultaneous presses (e.g. two visitors at the same time) cannot
+        both see ``system_active == False`` and both try to start
+        playback at the same time.
 
         Args:
             instrument_num: Instrument number corresponding to the pressed
@@ -108,7 +130,8 @@ class LooperEngine:
         """
         current_time = time.time()
 
-        # Reject presses that arrive within the cooldown window.
+        # Cooldown check BEFORE acquiring the lock so we never block the
+        # lock for a press that will be discarded anyway.
         if ((current_time - self.last_press_times.get(instrument_num, 0))
                 < self.button_cooldown_seconds):
             logger.debug(
@@ -117,51 +140,56 @@ class LooperEngine:
             )
             return
 
-        self.last_press_times[instrument_num] = current_time
-
         if not 1 <= instrument_num <= 18:
             logger.warning(
                 f"Invalid instrument number received: {instrument_num}"
             )
             return
 
-        # Activate the system on the first button press from idle state.
-        if not self.system_active:
-            success = self._activate_system(restart_song=True)
-            if not success:
-                logger.error("Failed to activate system")
-                return
+        with self._state_lock:
+            # Re-read time inside the lock so the cooldown stamp is
+            # accurate even if we waited briefly for the lock.
+            self.last_press_times[instrument_num] = time.time()
 
-        # Any valid press resets the global inactivity timer.
-        self.global_expiry_time = time.time() + self.global_timeout
-        logger.debug(
-            f"Global timer reset. Expires in {self.global_timeout}s."
-        )
+            # Activate the system on the first button press from idle state.
+            if not self.system_active:
+                success = self._activate_system(restart_song=True)
+                if not success:
+                    logger.error("Failed to activate system")
+                    return
 
-        # Toggle the pressed instrument on or off.
-        if self.instrument_active[instrument_num]:
-            self._deactivate_instrument(instrument_num)
-        else:
-            if instrument_num in self.audio_manager.get_available_instruments():
-                self._activate_instrument(instrument_num)
-                self.stats_collector.record_instrument(instrument_num)
+            # Any valid press resets the global inactivity timer.
+            self.global_expiry_time = time.time() + self.global_timeout
+            logger.debug(
+                f"Global timer reset. Expires in {self.global_timeout}s."
+            )
 
-                song_info = self.audio_manager.get_current_song_info()
-                logger.debug(
-                    f"Instrument {instrument_num} activated in song "
-                    f"'{song_info['name']}'"
-                )
+            # Toggle the pressed instrument on or off.
+            if self.instrument_active[instrument_num]:
+                self._deactivate_instrument(instrument_num)
             else:
-                current_song = (
-                    self.audio_manager.get_current_song_info()['name']
-                )
-                logger.warning(
-                    f"Instrument {instrument_num} not available in song "
-                    f"'{current_song}' (no audio file)."
-                )
+                if instrument_num in self.audio_manager.get_available_instruments():
+                    self._activate_instrument(instrument_num)
+                    self.stats_collector.record_instrument(instrument_num)
+
+                    song_info = self.audio_manager.get_current_song_info()
+                    logger.debug(
+                        f"Instrument {instrument_num} activated in song "
+                        f"'{song_info['name']}'"
+                    )
+                else:
+                    current_song = (
+                        self.audio_manager.get_current_song_info()['name']
+                    )
+                    logger.warning(
+                        f"Instrument {instrument_num} not available in song "
+                        f"'{current_song}' (no audio file)."
+                    )
 
     def _activate_system(self, restart_song: bool = False) -> bool:
         """Start audio playback and initialize session tracking.
+
+        Must be called with ``_state_lock`` held.
 
         Args:
             restart_song: If True, reset the playback position to the
@@ -197,7 +225,10 @@ class LooperEngine:
         return success
 
     def _deactivate_system(self):
-        """Stop playback, reset all instrument states, and trigger rotation."""
+        """Stop playback, reset all instrument states, and trigger rotation.
+
+        Must be called with ``_state_lock`` held.
+        """
         session_duration = (
             time.time() - self.session_start_time
             if self.session_start_time > 0 else 0
@@ -220,7 +251,10 @@ class LooperEngine:
             self._handle_song_rotation()
 
     def _handle_song_rotation(self):
-        """Advance to the next song after the current session ends."""
+        """Advance to the next song after the current session ends.
+
+        Must be called with ``_state_lock`` held.
+        """
         try:
             old_song = self.audio_manager.get_current_song_info()['name']
             new_song = self.audio_manager.switch_to_next_song()
@@ -247,6 +281,8 @@ class LooperEngine:
     def _activate_instrument(self, instrument_num: int):
         """Fade in a single instrument and start its individual timer.
 
+        Must be called with ``_state_lock`` held.
+
         Args:
             instrument_num: Instrument number to activate (1–18).
         """
@@ -264,6 +300,8 @@ class LooperEngine:
     def _deactivate_instrument(self, instrument_num: int):
         """Fade out a single instrument and clear its timer.
 
+        Must be called with ``_state_lock`` held.
+
         Args:
             instrument_num: Instrument number to deactivate (1–18).
         """
@@ -277,6 +315,9 @@ class LooperEngine:
 
         Sleeps for 0.5 s while the system is idle and for 0.2 s while
         active, keeping CPU usage minimal.
+
+        The lock is acquired only for the actual state-change calls, NOT
+        during the sleep, so audio playback is never blocked by this loop.
         """
         while self.running:
             if not self.system_active:
@@ -285,17 +326,24 @@ class LooperEngine:
 
             current_time = time.time()
 
-            # Deactivate the whole system if the global timer has expired.
-            if current_time >= self.global_expiry_time:
-                self._deactivate_system()
-                continue
+            # Check timeouts under the lock to avoid racing with
+            # handle_button_press activating the system at the same moment.
+            with self._state_lock:
+                # Re-check inside the lock: a button press may have already
+                # reset the timer or deactivated the system while we waited.
+                if not self.system_active:
+                    continue
 
-            # Fade out any instruments whose individual timers have expired.
-            for i in range(1, 19):
-                if (self.instrument_active[i]
-                        and current_time >= self.instrument_expiry_times[i]):
-                    logger.info(f"Instrument {i} timeout - fading out.")
-                    self._deactivate_instrument(i)
+                if current_time >= self.global_expiry_time:
+                    self._deactivate_system()
+                    continue
+
+                # Fade out any instruments whose individual timers expired.
+                for i in range(1, 19):
+                    if (self.instrument_active[i]
+                            and current_time >= self.instrument_expiry_times[i]):
+                        logger.info(f"Instrument {i} timeout - fading out.")
+                        self._deactivate_instrument(i)
 
             time.sleep(0.2)
 
@@ -314,22 +362,23 @@ class LooperEngine:
         """
         logger.info("Manual song switch requested")
 
-        was_active = self.system_active
-        if self.system_active:
-            self._deactivate_system()
+        with self._state_lock:
+            was_active = self.system_active
+            if self.system_active:
+                self._deactivate_system()
 
-        try:
-            new_song = self.audio_manager.switch_to_next_song()
-            logger.info(f"Manual song switch completed: {new_song}")
+            try:
+                new_song = self.audio_manager.switch_to_next_song()
+                logger.info(f"Manual song switch completed: {new_song}")
 
-            if was_active:
-                self._activate_system(restart_song=True)
+                if was_active:
+                    self._activate_system(restart_song=True)
 
-            return new_song
+                return new_song
 
-        except Exception as e:
-            logger.error(f"Manual song switch failed: {e}")
-            raise
+            except Exception as e:
+                logger.error(f"Manual song switch failed: {e}")
+                raise
 
     def get_system_status(self) -> dict:
         """Return a snapshot of the current system state.

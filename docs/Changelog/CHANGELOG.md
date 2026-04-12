@@ -113,3 +113,24 @@ Tento súbor zaznamenáva všetky zmeny vykonané v projekte **Audio Loop System
 - Stats server (HTTP dashboard + JSON API)
 - StatsCollector s periodic save (každých 5 minút) a atomic write
 - systemd user service pre autoštart
+
+> KOMENTÁR DOLE MA PLATNOST OD TOHOTO, čiže od 12.4
+[1.3.0] – 2026-04-12 – Thread Safety Fixes and Audio Validation
+looper_engine.py
+
+[FIX P1] Added self._state_lock = threading.Lock() to serialise all state-changing operations
+[FIX P1] handle_button_press now acquires _state_lock for the full critical section — two simultaneous button presses (e.g. two visitors at the same time) can no longer both see system_active == False and both attempt to start playback
+[FIX P1/P3] _deactivate_system and _activate_system are now always called under _state_lock — eliminates race condition between _logic_loop timeout thread and button press callback threads
+[FIX P3] _logic_loop acquires _state_lock only around the timeout check, not during time.sleep(0.2) — audio playback is never blocked by the lock
+[FIX P3] Added re-check of system_active inside the lock in _logic_loop — handles the case where a button press reset the timer while the loop was waiting for the lock
+[FIX] shutdown and force_song_switch also execute under _state_lock for full consistency
+
+audio_manager.py
+
+[FIX P4] _load_current_song now raises ValueError if tracks within one song have inconsistent sample rates — previously the most common rate was silently selected, leaving some tracks pitch/tempo shifted
+[FIX P4] _load_current_song now raises ValueError if the new song's sample rate differs from the already-running audio stream — previously this caused silent audio distortion with no warning
+[FIX P4] switch_to_next_song now rolls back current_song_index and current_song_name on any load failure — system stays on the previous song instead of entering an inconsistent state
+
+> ⚠️ **POZOR – NENAHRANÉ A NETESTOVANÉ**
+> Zmeny v tejto verzii **neboli ešte nasadené na Raspberry Pi** a **neboli reálne otestované**.
+> Pred inštaláciou do múzea je **NUTNÉ** vykonať test na hardvéri.
