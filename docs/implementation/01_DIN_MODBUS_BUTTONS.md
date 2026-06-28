@@ -54,16 +54,16 @@ Default mapping:
 
 ## Implementation rollout
 
-- Phase A: `[verified on Box 1] 2026-06-28 22:11:36 +02:00` - GPIO is removed
-  from the production startup path and the running app reacts to real Modbus DI
-  presses from the configured `box_1`. Tested channels in the running app:
-  `DI1`, `DI3`, `DI4`, `DI6`, `DI7`, `DI8`. A final full pass should still
-  press `DI1-DI8` deliberately once all audio files/mapping are ready.
+- Phase A: `[verified on Box 1 DI1-DI8] 2026-06-28 22:23:20 +02:00` - GPIO is
+  removed from the production startup path and the running app reacts to real
+  Modbus DI presses from the configured `box_1`. A deliberate DI1-DI8 pass was
+  completed in the running app.
 - Phase B: `[pending]` - add `box_2` to config for inputs 9-16 once the second
   module is wired and passes the same monitor/smoke tests.
-- Phase C: `[partially implemented] 2026-06-28 22:11:36 +02:00` - LED feedback
-  code is wired through the shared Modbus bus and `LooperEngine`, but real DO
-  behavior in the running app still needs hardware verification.
+- Phase C: `[verified on Box 1 DI1-DI8] 2026-06-28 22:23:20 +02:00` - LED
+  feedback code is wired through the shared Modbus bus and `LooperEngine`.
+  Real DI1-DI4 activations light the expected active-layer LEDs; DI5-DI8 are
+  unavailable in `song1` and correctly do not become active layers.
 
 ## Implementation log
 
@@ -108,9 +108,17 @@ Default mapping:
   `main.py` now reads `config.json` with `encoding='utf-8-sig'` in both config
   load paths. Verified with the same Python 3.13 interpreter that `json.load`
   now reads `outputs.provider == "modbus_panel"`.
-- `[pending]` - Run the real app against Box 1 and confirm LED behavior on
-  physical outputs: available layer press turns the matching DO on, pressing it
-  again or timing out turns it off, global timeout/shutdown clears all LEDs.
+- `[verified] 2026-06-28 22:20:24 +02:00` - Real app started with Box 1 online;
+  `modbus_led_controller` started for 8 outputs, DI1 triggered instrument 1,
+  and DO1/LED1 physically turned on and then off with the layer state.
+- `[verified] 2026-06-28 22:23:20 +02:00` - Full Box 1 DI1-DI8 app pass completed.
+  DI1, DI2, DI3, and DI4 reached active audio layers and their LEDs stayed lit
+  while active. Repeated DI3 presses toggled the layer as expected; stats only
+  incremented on activations. DI5-DI8 reached `LooperEngine` but logged
+  "instrument not available" because `song1` has no WAV files for those
+  instruments; this is expected and did not crash the app.
+- `[pending]` - Later, when WAV files exist for instruments 5-8, repeat the
+  full Box 1 pass to confirm DO5-DO8 light for real active layers too.
 
 ## New config shape
 

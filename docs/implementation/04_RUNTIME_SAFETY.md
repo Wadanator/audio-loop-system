@@ -27,6 +27,10 @@ final museum install.
   output from one shared `ModbusBus`, then stops input first, deactivates the
   looper, requests LEDs off, closes the Modbus bus, and only then shuts down
   audio.
+- `[implemented] 2026-06-28 22:34:29 +02:00` - After the package refactor,
+  `src/audio_loop/infra/paths.py` anchors runtime paths to the project root and
+  `logging_setup.py` was fixed so `critical_errors.log` still goes to root
+  `logs/` instead of inside the package directory.
 - `[pending]` - Hardware fault tests: disconnect Box 1 during playback, confirm
   audio continues, LED errors are logged, and reconnect resumes normal LED
   writes.
@@ -83,7 +87,7 @@ final museum install.
      - setup web
    - Each block logs success/failure with subsystem name.
 
-2. Resolve runtime paths once at startup
+2. Resolve runtime paths once at startup - `[partially implemented] 2026-06-28 22:34:29 +02:00`
    - Use explicit `paths` config or project-root defaults.
    - Log files must go to `logs/` under the runtime/project directory, not into
      the installed Python package.

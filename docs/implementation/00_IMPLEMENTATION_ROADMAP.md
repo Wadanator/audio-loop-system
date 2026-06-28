@@ -98,9 +98,21 @@ Implementation log:
 - `[implemented] 2026-06-28 22:16:02 +02:00` - Fixed config encoding after the
   `outputs` edit. `config.json` is UTF-8 without BOM again, and `main.py` reads
   config with `utf-8-sig` so a future BOM does not block startup.
-- `[pending]` - Real hardware verification that running the app turns the
-  corresponding DO/LED on for active layers and turns LEDs off on deactivation,
-  timeout, and shutdown.
+- `[verified] 2026-06-28 22:20:24 +02:00` - Box 1 DI1/DO1 end-to-end hardware
+  test passed in the running app: DI1 triggered instrument 1 and DO1/LED1
+  turned on/off with the layer state.
+- `[verified] 2026-06-28 22:23:20 +02:00` - Deliberate full Box 1 DI1-DI8 app
+  pass completed. Instruments 1-4 activate and light active LEDs; instruments
+  5-8 are unavailable in the current `song1` audio set and correctly log
+  warnings without activating or crashing.
+- `[implemented] 2026-06-28 22:34:29 +02:00` - Goal 2 refactor first pass
+  completed. Runtime modules moved under `src/audio_loop/`, root files are
+  compatibility wrappers, `python main.py` still imports `audio_loop.app`, and
+  smoke/import checks passed. Real Box 1 hardware retest after refactor is
+  still pending.
+- `[pending]` - Run the real Box 1 app after the refactor to confirm DI/DO
+  behavior is unchanged, then continue with config/watchdog cleanup or Goal 3
+  dashboard work.
 
 ## Implementation order
 
