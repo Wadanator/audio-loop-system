@@ -17,6 +17,19 @@ final museum install.
    audio.
 5. Startup should fail only for truly required pieces.
 
+## Implementation log
+
+- `[implemented] 2026-06-28 22:11:36 +02:00` - LED output is now best-effort.
+  `LooperEngine` catches LED update/sync errors, and `modbus_led_controller.py`
+  sends output writes on a background worker so audio state changes are not
+  blocked by normal LED calls.
+- `[implemented] 2026-06-28 22:11:36 +02:00` - `main.py` starts input and LED
+  output from one shared `ModbusBus`, then stops input first, deactivates the
+  looper, requests LEDs off, closes the Modbus bus, and only then shuts down
+  audio.
+- `[pending]` - Hardware fault tests: disconnect Box 1 during playback, confirm
+  audio continues, LED errors are logged, and reconnect resumes normal LED
+  writes.
 ## Required degraded modes
 
 | Failure | Expected behavior |
@@ -82,7 +95,7 @@ final museum install.
    - Catch web startup exceptions inside the web thread.
    - Do not call `shutdown(exit_code=1)` because web failed.
 
-4. Treat LEDs as best-effort
+4. Treat LEDs as best-effort - `[implemented, fault-test pending] 2026-06-28 22:11:36 +02:00`
    - Wrap each LED controller call from `LooperEngine`.
    - Track last LED error for diagnostics.
    - Provide `resync_leds(active_layers)` after Modbus reconnect.
@@ -107,7 +120,7 @@ final museum install.
    - Use existing `_state_lock` when returning mutable state if needed.
    - Return copies/lists, not references to internal dictionaries.
 
-7. Clean shutdown order
+7. Clean shutdown order - `[partially implemented] 2026-06-28 22:11:36 +02:00`
    - Stop input handler first, so no new button events are created.
    - Stop web server or mark it shutting down.
    - Save stats.

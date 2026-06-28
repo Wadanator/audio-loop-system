@@ -26,6 +26,15 @@ through `test/di_monitor.py`:
 That working script is now the reference for the first implementation step:
 register DI state changes first, without audio, GPIO, LED logic, or web UI.
 
+Implementation log:
+
+- `[verified] 2026-06-28 21:55:36 +02:00` - `test/di_monitor.py` is confirmed
+  by bench testing to read all 8 DI channels from Box 1.
+- `[implemented + verified] 2026-06-28 21:55:36 +02:00` - `test/do_chaser.py`
+  exists and has been confirmed by bench testing to switch DO outputs in order.
+- `[pending]` - repeat the same DI/DO bring-up on Box 2 when that module is
+  wired.
+
 ## DI event registration pattern from `di_monitor.py`
 
 The production input handler should reuse the same basic idea, minus the

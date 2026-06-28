@@ -43,7 +43,6 @@ src/audio_loop/
     __init__.py
     base.py
     modbus_panel.py
-    gpio_legacy.py
 
   output/
     __init__.py
@@ -130,9 +129,9 @@ tests/
      - `event_bus=None` or callback list if needed later.
 
 7. Move input code
-   - Move current `button_handler.py` to
-     `src/audio_loop/input/gpio_legacy.py`.
-   - Rename class later if useful, but keep compatibility during the move.
+   - Move the new Modbus input code into `src/audio_loop/input/modbus_panel.py`.
+   - Leave old `button_handler.py` out of the app startup path and delete it in
+     a later cleanup once Modbus input is fully proven.
    - Add `src/audio_loop/input/base.py`.
    - Add provider factory:
      - `create_input_handler(config, callback)`.

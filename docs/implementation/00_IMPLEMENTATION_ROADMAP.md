@@ -11,6 +11,24 @@ Reference inputs:
   (V11 - DIN box wiring and Python reference implementation)
 - UI reference project: `C:/Users/Wajdy/Documents/Kodovanie/museum-system`
 
+## Documentation rule: plan + implementation log
+
+These `.md` files are not only plans. They are also the implementation log for
+work done in small phases.
+
+Whenever a phase, step, script, or behavior is implemented, update the relevant
+`.md` file in the same change with:
+
+- status marker: `[implemented]`, `[partially implemented]`, `[verified]`, or
+  `[pending]`
+- timestamp in local time, for example `2026-06-28 21:55:36 +02:00`
+- changed files
+- what was verified
+- what remains pending
+
+Do not leave a completed code change represented only as a future TODO in the
+plan. If code exists, the matching plan section must say so explicitly.
+
 ## Target outcome
 
 The audio system keeps the current reliable playback core, but replaces direct
@@ -57,10 +75,32 @@ endpoints**, not as one endpoint addressing two unit IDs on a shared bus.
 ## Current implementation milestone
 
 One external IO module is already confirmed working via `test/di_monitor.py`.
-The next software step is not the full dashboard or two-box setup yet. The next
-step is to remove RPi GPIO from the production path and make the app accept
-external Modbus DI events from the working 8-channel module. That path must run
-on Windows as well as on Raspberry Pi.
+The current software milestone is Phase A of `01_DIN_MODBUS_BUTTONS.md`: remove
+RPi GPIO from the production startup path and accept external Modbus DI events
+from the working 8-channel module. That path must run on Windows as well as on
+Raspberry Pi.
+
+Implementation log:
+
+- `[implemented] 2026-06-28 21:55:36 +02:00` - Phase A code path created.
+  `main.py` now creates `modbus_panel`, `modbus_button_handler.py` was added,
+  `config.json` points to `box_1` at `192.168.0.200:4196`, and normal install
+  dependencies no longer include `RPi.GPIO`.
+- `[verified] 2026-06-28 22:11:36 +02:00` - Full app started on Windows with
+  Box 1 connected. Real DI presses were logged through the running app for
+  multiple channels (`DI1`, `DI3`, `DI4`, `DI6`, `DI7`, `DI8`) and reached
+  `LooperEngine.handle_button_press(...)`. Channels without WAV files correctly
+  produced "instrument not available" warnings instead of crashing.
+- `[implemented] 2026-06-28 22:11:36 +02:00` - Shared Modbus bus and LED output
+  code added. `modbus_bus.py` now owns one client/lock per module, input polling
+  uses that shared bus, and `modbus_led_controller.py` mirrors active layers to
+  DO outputs best-effort.
+- `[implemented] 2026-06-28 22:16:02 +02:00` - Fixed config encoding after the
+  `outputs` edit. `config.json` is UTF-8 without BOM again, and `main.py` reads
+  config with `utf-8-sig` so a future BOM does not block startup.
+- `[pending]` - Real hardware verification that running the app turns the
+  corresponding DO/LED on for active layers and turns LEDs off on deactivation,
+  timeout, and shutdown.
 
 ## Implementation order
 

@@ -32,26 +32,25 @@ echo "📦 Installing Python dependencies..."
 # Try system packages first (Debian/Ubuntu way)
 echo "Trying system packages first..."
 sudo apt update
-sudo apt install -y python3-pygame python3-numpy python3-rpi.gpio || echo "Some system packages not available, continuing..."
+sudo apt install -y python3-pygame python3-numpy || echo "Some system packages not available, continuing..."
 
 # For packages not available via apt, use pip with --break-system-packages
 echo "Installing remaining packages via pip..."
 if command -v pip3 &> /dev/null; then
-    pip3 install --user --break-system-packages sounddevice soundfile sdnotify || {
+    pip3 install --user --break-system-packages sounddevice soundfile sdnotify pymodbus || {
         echo "Trying alternative installation method..."
-        python3 -m pip install --user --break-system-packages sounddevice soundfile sdnotify
+        python3 -m pip install --user --break-system-packages sounddevice soundfile sdnotify pymodbus
     }
 else
-    python3 -m pip install --user --break-system-packages sounddevice soundfile sdnotify
+    python3 -m pip install --user --break-system-packages sounddevice soundfile sdnotify pymodbus
 fi
 
 echo "✅ Python dependencies installed"
 
 # Step 2: Add user to required groups
 echo ""
-echo "👥 Adding user to audio and gpio groups..."
+echo "Adding user to audio group..."
 sudo usermod -aG audio "$USER_NAME"
-sudo usermod -aG gpio "$USER_NAME"
 
 # Step 3: Create logs directory
 echo ""
@@ -156,7 +155,7 @@ echo "🎉 Installation complete!"
 echo ""
 echo "Next steps:"
 echo "1. Add your .wav files (1.wav, 2.wav, etc.) to audio_files/ directory"
-echo "2. Configure GPIO pins in config.json if needed"
+echo "2. Configure modbus_panel in config.json for the external DIN IO module"
 echo "3. Visit the web interface to see statistics"
 echo ""
 echo "The system will start automatically on boot."

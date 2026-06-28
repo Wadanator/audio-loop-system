@@ -45,7 +45,7 @@ def detect_platform():
 
 def install_python_packages():
     """Install required Python packages"""
-    packages = ['pygame']
+    packages = ['pygame', 'pymodbus']
     
     for package in packages:
         cmd = f"{sys.executable} -m pip install {package}"
@@ -58,21 +58,12 @@ def install_raspberry_pi_packages():
     # System packages
     system_packages = [
         'sudo apt-get update',
-        'sudo apt-get install -y python3-pygame',
-        'sudo apt-get install -y python3-rpi.gpio'
+        'sudo apt-get install -y python3-pygame'
     ]
     
     for cmd in system_packages:
         if not run_command(cmd, f"System install: {cmd.split()[-1]}"):
             print("Warning: System package installation failed")
-    
-    # Python packages
-    pi_packages = ['RPi.GPIO']
-    for package in pi_packages:
-        cmd = f"{sys.executable} -m pip install {package}"
-        if not run_command(cmd, f"Installing {package}"):
-            print(f"Warning: {package} installation failed")
-    
     return True
 
 def install_windows_packages():
@@ -132,7 +123,7 @@ def main():
         print("✓ Installation completed successfully!")
         print("\nNext steps:")
         print("1. Place your audio files (1.wav - 8.wav) in the audio_files/ directory")
-        print("2. Configure GPIO pins in config.json if using Raspberry Pi")
+        print("2. Configure modbus_panel in config.json for the external DIN IO module")
         print("3. Run: python main.py")
     else:
         print("✗ Installation completed with errors")

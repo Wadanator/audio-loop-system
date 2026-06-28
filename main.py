@@ -14,7 +14,6 @@ import json
 import threading
 
 from audio_manager import AudioManager
-from button_handler import UniversalButtonHandler
 from looper_engine import LooperEngine
 from stats_server import run_stats_server
 from stats_collector import StatsCollector
@@ -61,6 +60,8 @@ class AudioLooper:
         self.audio_manager = None
         self.looper_engine = None
         self.button_handler = None
+        self.modbus_bus = None
+        self.led_controller = None
         self.stats_server_thread = None
         self.stats_collector = None
 
@@ -98,7 +99,7 @@ class AudioLooper:
             )
 
         try:
-            with open("config.json", 'r') as f:
+            with open("config.json", 'r', encoding='utf-8-sig') as f:
                 config = json.load(f)
         except Exception as e:
             raise FileNotFoundError(f"Could not read config.json: {e}")
@@ -161,7 +162,7 @@ class AudioLooper:
         Returns:
             Parsed configuration dictionary.
         """
-        with open("config.json", 'r') as f:
+        with open("config.json", 'r', encoding='utf-8-sig') as f:
             return json.load(f)
 
     def _initialize_components(self):
@@ -178,14 +179,17 @@ class AudioLooper:
 
             self.audio_manager = AudioManager(self.config)
 
+            self.modbus_bus = self._create_modbus_bus()
+            self.led_controller = self._create_led_controller(self.modbus_bus)
+
             self.looper_engine = LooperEngine(
-                self.audio_manager, self.config, self.stats_collector
+                self.audio_manager,
+                self.config,
+                self.stats_collector,
+                led_controller=self.led_controller
             )
 
-            self.button_handler = UniversalButtonHandler(
-                self.looper_engine.handle_button_press,
-                self.config
-            )
+            self.button_handler = self._create_button_handler(self.modbus_bus)
 
             # Pass the shared stats_collector so the server reads from RAM.
             self.stats_server_thread = threading.Thread(
@@ -202,6 +206,58 @@ class AudioLooper:
                 f"Critical component initialization failed: {e}"
             )
             self.shutdown(exit_code=1)
+
+    def _create_modbus_bus(self):
+        """Create the shared Modbus bus for DIN inputs and LED outputs."""
+        input_config = self.config.get('inputs', {})
+        provider = input_config.get('provider', 'modbus_panel')
+        output_config = self.config.get('outputs', {})
+        output_provider = output_config.get('provider', 'modbus_panel')
+
+        if provider == 'modbus_panel' or output_provider == 'modbus_panel':
+            from modbus_bus import ModbusBus
+
+            return ModbusBus(self.config)
+
+        return None
+
+    def _create_led_controller(self, modbus_bus):
+        """Create optional best-effort LED output provider."""
+        output_config = self.config.get('outputs', {})
+        if not output_config.get('enabled', True):
+            return None
+
+        provider = output_config.get('provider', 'modbus_panel')
+        if provider == 'modbus_panel':
+            from modbus_led_controller import ModbusLedController
+
+            return ModbusLedController(self.config, bus=modbus_bus)
+
+        raise RuntimeError(f"Unsupported output provider: {provider}")
+
+    def _create_button_handler(self, modbus_bus):
+        """Create the configured button input provider.
+
+        ``modbus_panel`` is the production path and is cross-platform. GPIO is
+        no longer part of the application startup path.
+        """
+        input_config = self.config.get('inputs', {})
+        provider = input_config.get('provider')
+
+        if provider is None:
+            # The production default is the external Modbus panel.
+            provider = 'modbus_panel'
+
+        if provider == 'modbus_panel':
+            from modbus_button_handler import ModbusButtonHandler
+
+            return ModbusButtonHandler(
+                self.looper_engine.handle_button_press,
+                self.config,
+                bus=modbus_bus
+            )
+
+        raise RuntimeError(f"Unsupported input provider: {provider}")
 
     def _signal_handler(self, signum, frame):
         """Initiate a graceful shutdown in response to OS signals.
@@ -230,6 +286,8 @@ class AudioLooper:
                 logger.warning(f"Initial song: {song_info['name']}")
 
             self.looper_engine.start()
+            if self.led_controller:
+                self.led_controller.start()
             self.button_handler.start()
             self.stats_server_thread.start()
             self.running = True
@@ -307,6 +365,10 @@ class AudioLooper:
             self.button_handler.stop()
         if hasattr(self, 'looper_engine') and self.looper_engine:
             self.looper_engine.shutdown()
+        if hasattr(self, 'led_controller') and self.led_controller:
+            self.led_controller.stop()
+        if hasattr(self, 'modbus_bus') and self.modbus_bus:
+            self.modbus_bus.close()
         if hasattr(self, 'audio_manager') and self.audio_manager:
             self.audio_manager.shutdown()
 

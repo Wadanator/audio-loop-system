@@ -18,8 +18,10 @@ adding Box 2 and the full 16-input panel.
 
 ## Current state
 
-- `button_handler.py` imports `RPi.GPIO` directly.
-- `main.py` always creates `UniversalButtonHandler`.
+- `button_handler.py` still exists as historical GPIO code, but `main.py` no
+  longer imports it or creates `UniversalButtonHandler`.
+- `main.py` now creates the configured external input provider; for Phase A
+  that provider is `modbus_panel`.
 - `test/di_monitor.py` already proves that the first external IO module can be
   read over Modbus TCP on Windows, without RPi GPIO.
 - `LooperEngine.handle_button_press(instrument_num)` is already the correct
@@ -44,19 +46,71 @@ From `navod.md` (V11):
 
 Default mapping:
 
-| Audio layer | Box | Channel |
-| --- | --- | --- |
-| 1-8 | Box 1 (IP `.200`), unit `0x01` | DI/DO 1-8 |
-| 9-16 | Box 2 (IP `.201`), unit `0x01` | DI/DO 1-8 |
-| 17-18 | none by default | web-only or future hardware |
+| Audio layer | Box                               | Channel                     |
+| ----------- | --------------------------------- | --------------------------- |
+| 1-8         | Box 1 (IP`.200`), unit `0x01` | DI/DO 1-8                   |
+| 9-16        | Box 2 (IP`.201`), unit `0x01` | DI/DO 1-8                   |
+| 17-18       | none by default                   | web-only or future hardware |
 
 ## Implementation rollout
 
-- Phase A: remove GPIO from the production startup path and support one
-  configured Modbus module (`box_1`) with 8 physical inputs.
-- Phase B: add `box_2` to config for inputs 9-16 once the second module is
-  wired and passes the same monitor/smoke tests.
-- Phase C: enable LED feedback and web remote press on top of the same mapping.
+- Phase A: `[verified on Box 1] 2026-06-28 22:11:36 +02:00` - GPIO is removed
+  from the production startup path and the running app reacts to real Modbus DI
+  presses from the configured `box_1`. Tested channels in the running app:
+  `DI1`, `DI3`, `DI4`, `DI6`, `DI7`, `DI8`. A final full pass should still
+  press `DI1-DI8` deliberately once all audio files/mapping are ready.
+- Phase B: `[pending]` - add `box_2` to config for inputs 9-16 once the second
+  module is wired and passes the same monitor/smoke tests.
+- Phase C: `[partially implemented] 2026-06-28 22:11:36 +02:00` - LED feedback
+  code is wired through the shared Modbus bus and `LooperEngine`, but real DO
+  behavior in the running app still needs hardware verification.
+
+## Implementation log
+
+- `[implemented] 2026-06-28 21:55:36 +02:00` - Added
+  `modbus_button_handler.py`, a cross-platform Modbus DI input handler based on
+  the proven `test/di_monitor.py` rising-edge pattern.
+- `[implemented] 2026-06-28 21:55:36 +02:00` - Updated `main.py` so the app no
+  longer imports `button_handler.py`/GPIO in the startup path and creates the
+  configured `modbus_panel` input provider.
+- `[implemented] 2026-06-28 21:55:36 +02:00` - Updated `config.json` for Phase
+  A with only `box_1` at `192.168.0.200:4196`, mapped to instruments 1-8.
+- `[implemented] 2026-06-28 21:55:36 +02:00` - Removed `RPi.GPIO` from normal
+  install dependencies and added/kept `pymodbus` for Modbus TCP input.
+- `[verified] 2026-06-28 21:55:36 +02:00` - Syntax checks passed for `main.py`,
+  `modbus_button_handler.py`, and `install_requirements.py`; `config.json`
+  parses and points to `modbus_panel` / `box_1`.
+- `[verified] 2026-06-28 22:11:36 +02:00` - Full app was started on Windows
+  using Python 3.13 with Box 1 online. Logs confirmed Modbus connection to
+  `192.168.0.200:4196` and real presses from `DI1`, `DI3`, `DI4`, `DI6`,
+  `DI7`, and `DI8` reaching `LooperEngine.handle_button_press(...)`.
+- `[implemented] 2026-06-28 22:11:36 +02:00` - Added `modbus_bus.py`, a shared
+  Modbus layer with one TCP client and one lock per configured module/IP. The
+  input handler now uses this bus instead of owning a raw pymodbus client.
+- `[implemented] 2026-06-28 22:11:36 +02:00` - Added
+  `modbus_led_controller.py`, an async best-effort DO/LED controller. Startup
+  and shutdown request all configured LEDs off; active layers request LED on;
+  inactive layers request LED off.
+- `[implemented] 2026-06-28 22:11:36 +02:00` - Updated `LooperEngine` to accept
+  an optional `led_controller` and mirror `_activate_instrument`,
+  `_deactivate_instrument`, and `_deactivate_system` into LED state changes.
+  LED errors are caught/logged and do not stop audio state changes.
+- `[implemented] 2026-06-28 22:11:36 +02:00` - Updated `main.py` and
+  `config.json` so `inputs` and `outputs` both use `modbus_panel` through the
+  same shared `ModbusBus` instance.
+- `[verified] 2026-06-28 22:11:36 +02:00` - `py_compile` passed for `main.py`,
+  `looper_engine.py`, `modbus_bus.py`, `modbus_button_handler.py`, and
+  `modbus_led_controller.py`; `config.json` parses with one configured module;
+  a fake-bus smoke test confirmed one rising-edge press and LED DO1 ON/OFF
+  writes.
+- `[implemented] 2026-06-28 22:16:02 +02:00` - Fixed a startup regression from
+  the config edit: `config.json` was rewritten as UTF-8 without BOM, and
+  `main.py` now reads `config.json` with `encoding='utf-8-sig'` in both config
+  load paths. Verified with the same Python 3.13 interpreter that `json.load`
+  now reads `outputs.provider == "modbus_panel"`.
+- `[pending]` - Run the real app against Box 1 and confirm LED behavior on
+  physical outputs: available layer press turns the matching DO on, pressing it
+  again or timing out turns it off, global timeout/shutdown clears all LEDs.
 
 ## New config shape
 
@@ -67,8 +121,7 @@ module since the boxes are distinguished by IP, not by Modbus address:
 ```json
 {
   "inputs": {
-    "provider": "modbus_panel",
-    "enable_legacy_gpio": false
+    "provider": "modbus_panel"
   },
   "modbus_panel": {
     "enabled": true,
@@ -158,12 +211,13 @@ problems cannot stall the other box's traffic.
 
 ## Implementation steps
 
-1. Add dependency
+1. Add dependency - `[implemented] 2026-06-28 21:55:36 +02:00`
+
    - Add `pymodbus` to `requirements.txt`.
    - Keep `minimalmodbus` only for one-off module address verification scripts
      (bench-side, before mounting - see `navod.md` Phase 1) if needed.
+2. Create shared Modbus bus service - `[implemented] 2026-06-28 22:11:36 +02:00`
 
-2. Create shared Modbus bus service
    - New module: `hardware/modbus_bus.py`.
    - Own one `pymodbus.client.ModbusTcpClient` instance per configured module
      (one per box IP) - not a single client shared across boxes.
@@ -176,8 +230,8 @@ problems cannot stall the other box's traffic.
    - Use a lock (or single worker queue) per client so concurrent reads/writes
      on the same box's connection cannot race. Independent boxes must be able
      to be polled without blocking each other.
-
 3. Create input/output abstraction
+
    - Add `input/base.py` with a small interface:
      - `start()`
      - `stop()`
@@ -186,8 +240,9 @@ problems cannot stall the other box's traffic.
      - `set_layer_active(instrument_num, active)`
      - `set_all(active)`
      - `sync_from_active_layers(active_layers)`
+4. Implement Modbus panel client - `[partially implemented] 2026-06-28 21:55:36 +02:00`
 
-4. Implement Modbus panel client
+   - Phase A file currently exists as root-level `modbus_button_handler.py`; move it to `input/modbus_panel.py` during the later package refactor.
    - New module: `input/modbus_panel.py`
    - Start from the proven `test/di_monitor.py` behavior: read 8 DI bits,
      remember the previous state, and emit a press only on `False -> True`.
@@ -211,8 +266,8 @@ problems cannot stall the other box's traffic.
      - rate-limit repeated log warnings to roughly once per minute
    - One module being unreachable must not stop polling or pressing through
      the other module.
+5. Implement LED control - `[implemented, hardware verification pending] 2026-06-28 22:11:36 +02:00`
 
-5. Implement LED control
    - New module: `output/led_panel.py`
    - Use the shared Modbus bus service for all coil writes, addressed to the
      correct module's client.
@@ -227,32 +282,33 @@ problems cannot stall the other box's traffic.
      - on shutdown, try to turn all configured LEDs off, on every module
      - on Modbus communication error for one module, log warning and continue
        audio logic and the other module's LED writes
+6. Wire LEDs into `LooperEngine` - `[implemented] 2026-06-28 22:11:36 +02:00`
 
-6. Wire LEDs into `LooperEngine`
    - Inject optional `led_controller` into `LooperEngine`.
    - `_activate_instrument(n)` calls `set_layer_active(n, True)`.
    - `_deactivate_instrument(n)` calls `set_layer_active(n, False)`.
    - `_deactivate_system()` calls `sync_from_active_layers([])` or `set_all(False)`.
    - LED errors must never prevent audio state changes.
+7. Wire production startup in `main.py` - `[implemented] 2026-06-28 22:11:36 +02:00`
 
-7. Wire production startup in `main.py`
    - Load config.
    - If `inputs.provider == "modbus_panel"`, create one shared Modbus bus
      service that opens a TCP client per configured module (Box 1 at its IP,
      Box 2 at its IP), then create the Modbus input handler and LED controller
      from that bus.
-   - Create `LooperEngine(audio_manager, config, stats_collector,
-     led_controller=led_controller)`.
-   - Start the Modbus input handler instead of `UniversalButtonHandler`.
+   - Create `LooperEngine(audio_manager, config, stats_collector, led_controller=led_controller)`.
+   - Start the Modbus input handler; do not instantiate `UniversalButtonHandler`.
    - Do not import `RPi.GPIO` when using Modbus provider.
+8. Retire GPIO from the app startup path - `[implemented] 2026-06-28 21:55:36 +02:00`
 
-8. Keep a development fallback
-   - Move GPIO handler to `input/gpio_legacy.py`.
-   - Enable it only if config explicitly says `provider: "gpio_legacy"`.
-   - This keeps old bench testing possible, but production no longer depends
-     on direct RPi buttons.
-
+   - Do not import `button_handler.py` from `main.py`.
+   - Do not install `RPi.GPIO` as a normal dependency.
+   - Keep old GPIO code only as historical reference until it is deleted in a
+     later cleanup pass.
+   - The only supported input provider for this implementation step is
+     `modbus_panel`.
 9. Add verification script
+
    - New script: `scripts/verify_modbus_panel.py`
    - Connects to each configured module's IP independently.
    - Reads DI state per module.
@@ -261,8 +317,8 @@ problems cannot stall the other box's traffic.
 
 ## Acceptance criteria
 
-- Starting the app with `provider: "modbus_panel"` does not import `RPi.GPIO`,
-  so the non-GPIO path can run on Windows and Raspberry Pi.
+- Starting the app does not import `RPi.GPIO`, so the non-GPIO path can run on
+  Windows and Raspberry Pi.
 - Phase A works with only `box_1` configured and only 8 physical inputs.
 - Pressing DIN button 1 (Box 1) calls `handle_button_press(1)`.
 - Pressing DIN button 9 (Box 2) calls `handle_button_press(9)`.

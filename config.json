@@ -1,67 +1,102 @@
 {
-  "raspberry_pi": {
-    "use_physical_buttons": true,
-    "button_pins": {
-      "1": 4,
-      "2": 17,
-      "3": 27,
-      "4": 22,
-      "5": 5,
-      "6": 6,
-      "7": 13,
-      "8": 19,
-      "9": 26,
-      "10": 18,
-      "11": 23,
-      "12": 24,
-      "13": 25,
-      "14": 12,
-      "15": 16,
-      "16": 20,
-      "17": 21,
-      "18": 1
-    },
-    "pull_up": true,
-    "button_cooldown_seconds": 1.5
-  },
-  "debouncing": {
-    "debounce_time_ms": 80,
-    "min_press_duration_ms": 10,
-    "poll_interval_ms": 5,
-    "double_press_protection_ms": 1000,
-    "enable_advanced_logging": false
-  },
-  "song_rotation": {
-    "enable": true,
-    "switch_on_global_timeout": true,
-    "base_directory": "audio_files",
-    "song_folders": [
-      "song1",
-      "song2",
-      "song3"
-    ]
-  },
-  "timeouts": {
-    "global_timeout": 75,
-    "instrument_timeout": 60,
-    "fade_duration": 2
-  },
-  "jack": {
-    "sample_rate": 48000,
-    "buffer_size": 2048
-  },
-  "stats_server": {
-    "host": "0.0.0.0",
-    "port": 8000
-  },
-  "performance": {
-    "max_concurrent_sounds": 18,
-    "preload_sounds": true,
-    "mono_audio": false,
-    "memory_management": true
-  },
-  "audio": {
-    "output_device": null,
-    "max_loop_length": 180
-  }
+    "inputs":  {
+                   "provider":  "modbus_panel"
+               },
+    "outputs":  {
+                    "provider":  "modbus_panel",
+                    "enabled":  true
+                },
+    "modbus_panel":  {
+                         "enabled":  true,
+                         "port":  4196,
+                         "timeout_seconds":  2,
+                         "poll_interval_ms":  75,
+                         "debounce_time_ms":  80,
+                         "min_press_duration_ms":  10,
+                         "double_press_protection_ms":  250,
+                         "modules":  [
+                                         {
+                                             "name":  "box_1",
+                                             "host":  "192.168.0.200",
+                                             "unit_id":  1,
+                                             "channels":  [
+                                                              {
+                                                                  "channel":  1,
+                                                                  "instrument":  1
+                                                              },
+                                                              {
+                                                                  "channel":  2,
+                                                                  "instrument":  2
+                                                              },
+                                                              {
+                                                                  "channel":  3,
+                                                                  "instrument":  3
+                                                              },
+                                                              {
+                                                                  "channel":  4,
+                                                                  "instrument":  4
+                                                              },
+                                                              {
+                                                                  "channel":  5,
+                                                                  "instrument":  5
+                                                              },
+                                                              {
+                                                                  "channel":  6,
+                                                                  "instrument":  6
+                                                              },
+                                                              {
+                                                                  "channel":  7,
+                                                                  "instrument":  7
+                                                              },
+                                                              {
+                                                                  "channel":  8,
+                                                                  "instrument":  8
+                                                              }
+                                                          ]
+                                         }
+                                     ]
+                     },
+    "raspberry_pi":  {
+                         "button_cooldown_seconds":  1.5
+                     },
+    "debouncing":  {
+                       "debounce_time_ms":  80,
+                       "min_press_duration_ms":  10,
+                       "poll_interval_ms":  75,
+                       "double_press_protection_ms":  250,
+                       "enable_advanced_logging":  true
+                   },
+    "song_rotation":  {
+                          "enable":  true,
+                          "switch_on_global_timeout":  true,
+                          "base_directory":  "audio_files",
+                          "song_folders":  [
+                                               "song1",
+                                               "song2",
+                                               "song3"
+                                           ]
+                      },
+    "timeouts":  {
+                     "global_timeout":  75,
+                     "instrument_timeout":  60,
+                     "fade_duration":  2
+                 },
+    "jack":  {
+                 "sample_rate":  48000,
+                 "buffer_size":  2048
+             },
+    "stats_server":  {
+                         "host":  "0.0.0.0",
+                         "port":  8000
+                     },
+    "performance":  {
+                        "max_concurrent_sounds":  18,
+                        "preload_sounds":  true,
+                        "mono_audio":  false,
+                        "memory_management":  true
+                    },
+    "audio":  {
+                  "output_device":  null,
+                  "max_loop_length":  180
+              }
 }

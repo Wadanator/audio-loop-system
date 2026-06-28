@@ -23,7 +23,8 @@ class LooperEngine:
         self,
         audio_manager: AudioManager,
         config: dict,
-        stats_collector: StatsCollector
+        stats_collector: StatsCollector,
+        led_controller=None
     ):
         """Initialize the looper engine.
 
@@ -34,10 +35,13 @@ class LooperEngine:
             stats_collector: Shared ``StatsCollector`` instance. Injected
                 from the caller so that a single object is used throughout
                 the application (no duplicate counters).
+            led_controller: Optional best-effort LED output controller. LED
+                errors must not block audio state changes.
         """
         self.audio_manager = audio_manager
         # Receive the shared instance rather than creating a duplicate.
         self.stats_collector = stats_collector
+        self.led_controller = led_controller
         self.config = config
 
         # Timeout values loaded from configuration.
@@ -245,6 +249,7 @@ class LooperEngine:
         self.system_active = False
         self.instrument_active = {i: False for i in range(1, 19)}
         self.instrument_expiry_times = {i: 0 for i in range(1, 19)}
+        self._sync_leds([])
 
         # Advance to the next song if rotation is enabled.
         if self.enable_song_rotation and self.song_switch_on_timeout:
@@ -278,6 +283,28 @@ class LooperEngine:
             logger.error(f"Error during song rotation: {e}")
             # Continue with the current song if loading the next one fails.
 
+    def _set_led_state(self, instrument_num: int, active: bool):
+        """Best-effort LED update for one instrument."""
+        if not self.led_controller:
+            return
+        try:
+            self.led_controller.set_layer_active(instrument_num, active)
+        except Exception as exc:
+            logger.warning(
+                "LED update failed for instrument %s: %s",
+                instrument_num,
+                exc,
+            )
+
+    def _sync_leds(self, active_layers):
+        """Best-effort LED sync for the complete active layer list."""
+        if not self.led_controller:
+            return
+        try:
+            self.led_controller.sync_from_active_layers(active_layers)
+        except Exception as exc:
+            logger.warning("LED sync failed: %s", exc)
+
     def _activate_instrument(self, instrument_num: int):
         """Fade in a single instrument and start its individual timer.
 
@@ -296,6 +323,7 @@ class LooperEngine:
             time.time() + self.instrument_timeout
         )
         self.audio_manager.fade_in(instrument_num, self.fade_duration)
+        self._set_led_state(instrument_num, True)
 
     def _deactivate_instrument(self, instrument_num: int):
         """Fade out a single instrument and clear its timer.
@@ -309,6 +337,7 @@ class LooperEngine:
         self.instrument_active[instrument_num] = False
         self.instrument_expiry_times[instrument_num] = 0
         self.audio_manager.fade_out(instrument_num, self.fade_duration)
+        self._set_led_state(instrument_num, False)
 
     def _logic_loop(self):
         """Background loop that evaluates global and per-instrument timeouts.
