@@ -53,7 +53,7 @@ class LooperEngine:
         self.instrument_timeout = self.config['timeouts']['instrument_timeout']
         self.fade_duration = self.config['timeouts']['fade_duration']
         self.button_cooldown_seconds = (
-            self.config.get('raspberry_pi', {})
+            self.config.get('inputs', {})
             .get('button_cooldown_seconds', 0.8)
         )
 

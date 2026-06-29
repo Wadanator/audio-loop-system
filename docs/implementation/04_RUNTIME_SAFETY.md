@@ -31,6 +31,11 @@ final museum install.
   `src/audio_loop/infra/paths.py` anchors runtime paths to the project root and
   `logging_setup.py` was fixed so `critical_errors.log` still goes to root
   `logs/` instead of inside the package directory.
+- `[implemented] 2026-06-29 10:47:35 +02:00` - Config loading and
+  startup filesystem checks now live in `src/audio_loop/config.py`; systemd
+  READY/WATCHDOG notification code now lives in `src/audio_loop/infra/watchdog.py`.
+  This keeps runtime setup and watchdog behavior explicit after the package
+  refactor.
 - `[pending]` - Hardware fault tests: disconnect Box 1 during playback, confirm
   audio continues, LED errors are logged, and reconnect resumes normal LED
   writes.
@@ -87,7 +92,7 @@ final museum install.
      - setup web
    - Each block logs success/failure with subsystem name.
 
-2. Resolve runtime paths once at startup - `[partially implemented] 2026-06-28 22:34:29 +02:00`
+2. Resolve runtime paths once at startup - `[implemented] 2026-06-29 10:47:35 +02:00`
    - Use explicit `paths` config or project-root defaults.
    - Log files must go to `logs/` under the runtime/project directory, not into
      the installed Python package.

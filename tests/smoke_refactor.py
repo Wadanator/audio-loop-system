@@ -124,7 +124,7 @@ def test_looper_engine_toggles_layer_with_fake_dependencies():
             "instrument_timeout": 60,
             "fade_duration": 2,
         },
-        "raspberry_pi": {
+        "inputs": {
             "button_cooldown_seconds": 0,
         },
         "song_rotation": {
@@ -144,7 +144,19 @@ def test_looper_engine_toggles_layer_with_fake_dependencies():
     assert ("layer", 1, True) in leds.events
     assert ("layer", 1, False) in leds.events
 
+
+def test_config_module_loads_current_config():
+    config_module = importlib.import_module("audio_loop.config")
+    config = config_module.load_config()
+
+    assert config["inputs"]["provider"] == "modbus_panel"
+    assert config["inputs"]["button_cooldown_seconds"] == 1.5
+    assert "raspberry_pi" not in config
+    assert config["outputs"]["provider"] == "modbus_panel"
+
+
 if __name__ == "__main__":
     test_import_main_does_not_import_gpio_or_legacy_wrappers()
+    test_config_module_loads_current_config()
     test_looper_engine_toggles_layer_with_fake_dependencies()
     print("smoke_refactor ok")

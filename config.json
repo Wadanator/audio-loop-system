@@ -1,6 +1,7 @@
 {
     "inputs":  {
-                   "provider":  "modbus_panel"
+                   "provider":  "modbus_panel",
+                   "button_cooldown_seconds":  1.5
                },
     "outputs":  {
                     "provider":  "modbus_panel",
@@ -56,9 +57,7 @@
                                          }
                                      ]
                      },
-    "raspberry_pi":  {
-                         "button_cooldown_seconds":  1.5
-                     },
+
     "debouncing":  {
                        "debounce_time_ms":  80,
                        "min_press_duration_ms":  10,

@@ -79,7 +79,7 @@ Default mapping:
 - `[implemented] 2026-06-28 21:55:36 +02:00` - Removed `RPi.GPIO` from normal
   install dependencies and added/kept `pymodbus` for Modbus TCP input.
 - `[verified] 2026-06-28 21:55:36 +02:00` - Syntax checks passed for `main.py`,
-  `src/audio_loop/input/modbus_panel.py`, and `install_requirements.py`; `config.json`
+  `src/audio_loop/input/modbus_panel.py`; `config.json`
   parses and points to `modbus_panel` / `box_1`.
 - `[verified] 2026-06-28 22:11:36 +02:00` - Full app was started on Windows
   using Python 3.13 with Box 1 online. Logs confirmed Modbus connection to
@@ -183,7 +183,7 @@ individual module only if a later box is configured differently.
 For Phase A, it is valid to keep only the `box_1` entry in `modules`. The code
 must not require `box_2` to exist before the first 8-button version works.
 
-Do not reintroduce old `raspberry_pi.button_pins` or direct GPIO config. The
+Do not reintroduce old `raspberry_pi.*` config or direct GPIO config. The
 production/development input path is now `inputs.provider = "modbus_panel"`.
 
 ## Polling and debounce policy

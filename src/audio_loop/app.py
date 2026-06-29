@@ -5,49 +5,27 @@ Audio Looper System - SD Card Optimized Version
 Minimizes write operations to the SD card for longer storage lifespan.
 """
 
-import sys
-import os
-
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
-
 import logging
+import sys
 import time
 import signal
-import json
 import threading
 
 from audio_loop.audio.manager import AudioManager
+from audio_loop.config import load_config, validate_runtime_requirements
 from audio_loop.core.looper_engine import LooperEngine
 from audio_loop.web.stats_server import run_stats_server
 from audio_loop.stats.collector import StatsCollector
 from audio_loop.infra.logging_setup import setup_logging
+from audio_loop.infra.watchdog import (
+    WATCHDOG_INTERVAL,
+    notify_ready,
+    send_watchdog,
+)
 
 
 setup_logging()
 logger = logging.getLogger(__name__)
-
-# Interval in seconds between systemd watchdog keep-alive pings.
-_WATCHDOG_INTERVAL = 25
-
-
-def _send_watchdog():
-    """Send a WATCHDOG=1 notification to systemd if sdnotify is available.
-
-    Uses a graceful fallback: if the ``sdnotify`` package is not installed,
-    the call is silently skipped so the rest of the system is unaffected.
-    The watchdog is only active when the service is running under systemd
-    with ``WatchdogSec`` set in the unit file.
-    """
-    try:
-        import sdnotify
-        n = sdnotify.SystemdNotifier()
-        n.notify("WATCHDOG=1")
-    except ImportError:
-        pass  # sdnotify not installed; watchdog pings are silently skipped.
-    except Exception as e:
-        logger.warning(f"Watchdog notify failed: {e}")
 
 
 class AudioLooper:
@@ -59,12 +37,12 @@ class AudioLooper:
 
     def __init__(self):
         """Initialize the application and all subsystem components."""
-        self._check_requirements()
-        self.config = self._load_config()
+        self.config = load_config()
+        validate_runtime_requirements(self.config)
 
         self.audio_manager = None
         self.looper_engine = None
-        self.button_handler = None
+        self.input_handler = None
         self.modbus_bus = None
         self.led_controller = None
         self.stats_server_thread = None
@@ -87,88 +65,6 @@ class AudioLooper:
         signal.signal(signal.SIGINT, self._signal_handler)
 
         self._initialize_components()
-
-    def _check_requirements(self):
-        """Verify that all required files and directories are present.
-
-        Raises:
-            FileNotFoundError: If ``config.json``, ``audio_files/``, or the
-                expected WAV file structure is missing.
-        """
-        if not os.path.exists("config.json"):
-            raise FileNotFoundError("config.json required but not found")
-
-        if not os.path.exists("audio_files"):
-            raise FileNotFoundError(
-                "audio_files/ directory required but not found"
-            )
-
-        try:
-            with open("config.json", 'r', encoding='utf-8-sig') as f:
-                config = json.load(f)
-        except Exception as e:
-            raise FileNotFoundError(f"Could not read config.json: {e}")
-
-        song_rotation_config = config.get('song_rotation', {})
-
-        if song_rotation_config.get('enable', False):
-            self._check_song_folders(config)
-        else:
-            self._check_direct_wav_files()
-
-    def _check_song_folders(self, config):
-        """Verify that at least one configured song subfolder contains WAV files.
-
-        Args:
-            config: Parsed configuration dictionary.
-
-        Raises:
-            FileNotFoundError: If no valid song folder is found.
-        """
-        song_config = config.get('song_rotation', {})
-        base_dir = song_config.get('base_directory', 'audio_files')
-        song_folders = song_config.get('song_folders', ['song1'])
-
-        found_valid_songs = False
-
-        for song_name in song_folders:
-            if song_name == 'default':
-                song_path = base_dir
-            else:
-                song_path = os.path.join(base_dir, song_name)
-
-            if os.path.exists(song_path) and os.path.isdir(song_path):
-                wav_files = [
-                    f for f in os.listdir(song_path) if f.endswith('.wav')
-                ]
-                if wav_files:
-                    found_valid_songs = True
-
-        if not found_valid_songs:
-            raise FileNotFoundError("No valid song folders found!")
-
-    def _check_direct_wav_files(self):
-        """Verify that at least one WAV file exists in the audio_files directory.
-
-        Raises:
-            FileNotFoundError: If the directory contains no WAV files.
-        """
-        wav_files = [
-            f for f in os.listdir("audio_files") if f.endswith('.wav')
-        ]
-        if not wav_files:
-            raise FileNotFoundError(
-                "No .wav files found in audio_files/ directory"
-            )
-
-    def _load_config(self) -> dict:
-        """Read and parse the application configuration file.
-
-        Returns:
-            Parsed configuration dictionary.
-        """
-        with open("config.json", 'r', encoding='utf-8-sig') as f:
-            return json.load(f)
 
     def _initialize_components(self):
         """Instantiate all subsystem components and wire them together.
@@ -194,7 +90,7 @@ class AudioLooper:
                 led_controller=self.led_controller
             )
 
-            self.button_handler = self._create_button_handler(self.modbus_bus)
+            self.input_handler = self._create_input_handler(self.modbus_bus)
 
             # Pass the shared stats_collector so the server reads from RAM.
             self.stats_server_thread = threading.Thread(
@@ -240,11 +136,10 @@ class AudioLooper:
 
         raise RuntimeError(f"Unsupported output provider: {provider}")
 
-    def _create_button_handler(self, modbus_bus):
-        """Create the configured button input provider.
+    def _create_input_handler(self, modbus_bus):
+        """Create the configured physical input provider.
 
-        ``modbus_panel`` is the production path and is cross-platform. GPIO is
-        no longer part of the application startup path.
+        ``modbus_panel`` is the production path and is cross-platform.
         """
         input_config = self.config.get('inputs', {})
         provider = input_config.get('provider')
@@ -293,16 +188,12 @@ class AudioLooper:
             self.looper_engine.start()
             if self.led_controller:
                 self.led_controller.start()
-            self.button_handler.start()
+            self.input_handler.start()
             self.stats_server_thread.start()
             self.running = True
 
             # Notify systemd that the service is fully initialised.
-            try:
-                import sdnotify
-                sdnotify.SystemdNotifier().notify("READY=1")
-            except ImportError:
-                pass
+            notify_ready()
 
             loop_counter = 0
             while self.running:
@@ -323,8 +214,8 @@ class AudioLooper:
 
                 # Systemd watchdog keep-alive ping.
                 if (current_time - self.last_watchdog
-                        > _WATCHDOG_INTERVAL):
-                    _send_watchdog()
+                        > WATCHDOG_INTERVAL):
+                    send_watchdog()
                     self.last_watchdog = current_time
 
                 # Throttled status log: only when system is active.
@@ -366,8 +257,8 @@ class AudioLooper:
             except Exception as e:
                 logger.error(f"Failed to save stats on shutdown: {e}")
 
-        if hasattr(self, 'button_handler') and self.button_handler:
-            self.button_handler.stop()
+        if hasattr(self, 'input_handler') and self.input_handler:
+            self.input_handler.stop()
         if hasattr(self, 'looper_engine') and self.looper_engine:
             self.looper_engine.shutdown()
         if hasattr(self, 'led_controller') and self.led_controller:
@@ -387,11 +278,11 @@ def main():
         app = AudioLooper()
         app.run()
     except FileNotFoundError as e:
-        print(f"\n❌ SETUP ERROR:")
+        print("\nSETUP ERROR:")
         print(f"{e}")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ CRITICAL ERROR: {e}")
+        print(f"\nCRITICAL ERROR: {e}")
         sys.exit(1)
 
 

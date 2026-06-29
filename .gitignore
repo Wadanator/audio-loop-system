@@ -1,32 +1,28 @@
-# Logs a dočasné súbory
+# Runtime logs and generated files
 logs/
 *.log
 *.tmp
+stats.json
 
 # Python cache
 __pycache__/
 *.pyc
 *.pyo
 
-# Štatistiky
-stats.json
-
-# Audio súbory (môžu byť veľké)
+# Audio files can be large and room-specific
 audio_files/*.wav
 audio_files/song*/*.wav
 
-# Backup súbory
+# Local backups
 *.backup
 *.bak
 
-# OS súbory
+# OS/editor files
 .DS_Store
 Thumbs.db
-
-# Editor súbory
 *.swp
 *.swo
 *~
 
-# Systemd súbory (lokálne)
+# Local systemd overrides
 *.service.local

@@ -1,89 +1,52 @@
-# 02 – What the System Does
+# What the System Does
 
-The **Audio Loop System** is an interactive music installation designed for **24/7 unattended operation** in public spaces such as museums, galleries, or exhibitions.
+Audio Loop System is an interactive museum-room looper. Visitors press physical buttons, and each button toggles one synchronized audio layer. LEDs in the buttons mirror which layers are actively playing.
 
-It lets visitors physically interact with music by pressing buttons, each of which adds or removes an instrument from a synchronized audio playback — creating a layered, evolving soundscape.
+## Visitor Flow
 
----
+1. The room is idle and silent.
+2. Visitor presses a button.
+3. The system starts the current song from the beginning.
+4. The selected instrument fades in and its LED turns on.
+5. More buttons add or remove more layers.
+6. Missing audio files are ignored safely with a warning.
+7. Per-instrument timeout fades inactive layers out.
+8. Global timeout stops the session and can rotate to the next song.
 
-## Core Concept
+## Current Hardware Model
 
-The system plays a set of synchronized audio tracks (WAV files), each representing a single instrument (e.g. bass, drums, melody, strings). All tracks loop in perfect sync — they all start at position 0 and run at the same speed.
+- Physical input comes from DIN Modbus TCP modules, not Raspberry Pi GPIO.
+- Box 1 is verified: 8 digital inputs and 8 digital outputs.
+- Future target: two boxes for 16 inputs and 16 LED outputs.
+- One Raspberry Pi will host audio, IO processing, stats, and web UI.
 
-When a visitor presses a button, the corresponding instrument **fades in** to the mix. Pressing the button again **fades it out**. If no buttons are pressed for a configurable period, the system automatically goes silent and rotates to the next song.
+## LED Behavior
 
----
+- LED ON means the corresponding audio layer is actively playing.
+- LED OFF means the layer is inactive, unavailable, timed out, or the whole system is idle.
+- LED writes are best-effort. Audio behavior has priority over LED updates.
 
-## What Visitors Experience
+## Reliability Priorities
 
-1. The room is **silent** — the system is in idle state
-2. A visitor presses a button → music starts from the beginning, the pressed instrument fades in
-3. The visitor presses more buttons → more instruments join the mix, layering on top of each other
-4. After ~60 seconds of no interaction, each instrument fades out automatically
-5. After ~75 seconds of total inactivity, the music stops completely
-6. The **next song** is automatically loaded for the next visitor
+1. Audio playback and state must keep working.
+2. Physical buttons must keep working.
+3. Web UI is optional and must not block audio or buttons.
+4. LEDs are useful feedback but must not stop the system if a write fails.
+5. Stats are useful but lower priority than runtime behavior.
 
----
+## Runtime Layout
 
-## Key Features
+Runtime code lives in `src/audio_loop/`. Root `main.py` is only a launcher.
 
-### 🎵 Synchronized Multi-Track Playback
-- Plays up to **18 WAV tracks simultaneously**, all locked to the same position in the loop
-- All tracks are the same length — the loop wraps seamlessly
-- Volume for each track is independently controlled
-
-### 🎛️ Smooth Fade In / Fade Out
-- Each instrument fades in and out over a configurable duration (default: 2 seconds)
-- Prevents jarring cuts between silence and full volume
-
-### ⏱️ Dual Timeout System
-- **Per-instrument timeout (default: 60s)** — each instrument auto-fades if its button isn't pressed again
-- **Global timeout (default: 75s)** — if no button is pressed at all, the whole system stops
-- Both timers reset on any button press, keeping the system active as long as someone is interacting
-
-### 🔄 Song Rotation
-- Multiple songs (in subfolders `song1/`, `song2/`, `song3/`, ...) can be configured
-- After each session ends (global timeout), the system automatically advances to the next song
-- The next visitor gets a fresh musical experience with a different arrangement
-
-### 🛡️ 24/7 Reliability Features
-- Automatic audio stream recovery if the stream drops (e.g. USB DAC reconnect)
-- systemd watchdog — the OS automatically restarts the service if it freezes
-- Restart limits — prevents infinite crash loops
-- Graceful shutdown on SIGTERM/SIGINT — statistics saved before exit
-
-### 📊 Statistics Dashboard
-- Built-in web server accessible from any browser on the local network
-- Shows how many times each instrument was activated
-- Available at `http://<raspberry_pi_ip>:8000`
-- JSON API at `http://<raspberry_pi_ip>:8000/stats`
-
-### 💾 SD Card Optimization
-- Logs are written to disk only on ERROR — normal INFO messages go to journald (no SD writes)
-- Statistics are kept in RAM and written to disk only every 5 minutes
-- Atomic file writes (write to `.tmp`, then rename) prevent corrupted stats files
-- Log files rotate at 5MB with 2 backups — SD card usage stays bounded
-
----
-
-## System Boundaries
-
-| Parameter | Default | Configurable |
-|-----------|---------|:---:|
-| Max instruments | 18 | ❌ (hardware limit) |
-| Instrument timeout | 60s | ✅ |
-| Global timeout | 75s | ✅ |
-| Fade duration | 2s | ✅ |
-| Button cooldown | 1.5s | ✅ |
-| Songs in rotation | 3 | ✅ |
-| Stats save interval | 5 min | ✅ |
-| Log file max size | 5 MB × 2 files | ✅ |
-
----
-
-## Hardware Summary
-
-The system runs on a **Raspberry Pi 4** with:
-- Physical push buttons wired to GPIO pins (one per instrument)
-- Audio output via 3.5mm jack, USB DAC, or HDMI
-- Optional: network connection for the web statistics dashboard
+```text
+src/audio_loop/
+  app.py
+  audio/manager.py
+  core/looper_engine.py
+  hardware/modbus_bus.py
+  input/modbus_panel.py
+  output/led_panel.py
+  stats/collector.py
+  web/stats_server.py
+  infra/
+```

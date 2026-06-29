@@ -1,5 +1,5 @@
-pygame==2.6.0
 sounddevice>=0.4.0
 soundfile>=0.10.0
 numpy>=1.19.0
 pymodbus>=3.0.0
+sdnotify>=0.3.2

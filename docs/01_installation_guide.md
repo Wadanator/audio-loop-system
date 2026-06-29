@@ -1,213 +1,97 @@
-# 01 – Installation Guide: Fresh Raspberry Pi 4
+# Installation Guide
 
-This guide walks you through setting up the **Audio Loop System** on a brand-new Raspberry Pi 4 from scratch.
+This project is currently a development build for one museum room. The runtime is cross-platform, but the target deployment is one Raspberry Pi that runs audio processing, Modbus IO, and the local web UI.
 
----
+## Hardware
 
-## Requirements
+- Raspberry Pi 4 or newer for deployment.
+- DIN Modbus TCP IO modules for physical buttons and LEDs.
+- Current verified module: Box 1 at `192.168.0.200:4196`, Modbus unit `1`.
+- Box 1 provides DI1-DI8 and DO1-DO8.
+- Future expansion: Box 2 adds inputs/outputs 9-16.
+- Audio output through USB DAC, HDMI, or the system default audio device.
 
-| Component | Specification |
-|-----------|--------------|
-| Hardware | Raspberry Pi 4 (any RAM variant) |
-| OS | Raspberry Pi OS Lite (64-bit, Bookworm) |
-| Audio output | 3.5mm jack, USB DAC, or HDMI to amplifier |
-| Buttons | Up to 18 momentary push buttons wired to GPIO |
-| Storage | Minimum 4GB microSD card (Class 10 / A1 recommended) |
-| Power | Official RPi 4 USB-C power supply (5V/3A) |
+Direct Raspberry Pi GPIO buttons are not part of the current system. Do not add `RPi.GPIO` back as a runtime dependency.
 
----
+## Python Setup
 
-## Step 1 – Flash the OS
+```powershell
+pip install -r requirements.txt
+```
 
-1. Download **[Raspberry Pi Imager](https://www.raspberrypi.com/software/)** on your PC
-2. Insert your microSD card
-3. Choose **Raspberry Pi OS Lite (64-bit)** – no desktop needed
-4. In **Advanced settings (⚙️)**:
-   - Set hostname: `audiolooper`
-   - Enable SSH
-   - Set username/password (e.g. `pi` / your password)
-   - Configure Wi-Fi if needed
-5. Flash and insert the card into the Pi
+On the current Windows development machine, the tested command is:
 
----
+```powershell
+C:\Users\Wajdy\AppData\Local\Programs\Python\Python313\python.exe main.py
+```
 
-## Step 2 – First Boot and SSH
+On Raspberry Pi, run the same entrypoint from the project root:
 
 ```bash
-ssh pi@audiolooper.local
-# Or use the IP address if hostname doesn't resolve
+python3 main.py
 ```
 
-Update the system:
-```bash
-sudo apt update && sudo apt upgrade -y
-```
+## Configuration
 
----
-
-## Step 3 – Install System Dependencies
-
-```bash
-sudo apt install -y python3 python3-pip git python3-numpy python3-rpi.gpio
-```
-
-Install audio libraries:
-```bash
-sudo apt install -y libportaudio2 libsndfile1
-```
-
----
-
-## Step 4 – Clone the Project
-
-```bash
-cd ~
-git clone https://github.com/YOUR_USERNAME/audio-loop-system.git
-cd audio-loop-system
-```
-
-> If you don't use Git, copy the project folder to the Pi via SCP:
-> ```bash
-> scp -r ./audio-loop-system pi@audiolooper.local:~/
-> ```
-
----
-
-## Step 5 – Run the Installer
-
-The installer handles everything: Python packages, GPIO groups, logs directory, and systemd service.
-
-```bash
-cd ~/audio-loop-system
-chmod +x install.sh
-./install.sh
-```
-
-The installer will:
-1. Install Python packages: `sounddevice`, `soundfile`, `sdnotify`
-2. Add your user to `audio` and `gpio` groups
-3. Create the `logs/` directory
-4. Create and enable a **systemd user service** that starts on boot
-
----
-
-## Step 6 – Add Your Audio Files
-
-Place your WAV files inside `audio_files/`. The system supports **song rotation** – each song is a subfolder:
-
-```
-audio_files/
-├── song1/
-│   ├── 1.wav     ← instrument 1 (bass)
-│   ├── 2.wav     ← instrument 2 (drums)
-│   └── ...
-├── song2/
-│   ├── 1.wav
-│   └── ...
-└── song3/
-    └── ...
-```
-
-**WAV file requirements:**
-- Format: 16-bit or 32-bit PCM WAV
-- Channels: Mono (stereo files are automatically downmixed)
-- Sample rate: Any (48000 Hz recommended)
-- All tracks in one song should be the **same length** for perfect synchronization
-
----
-
-## Step 7 – Configure GPIO Pins
-
-Edit `config.json` to match your button wiring:
+The active input and output providers are configured in `config.json`:
 
 ```json
-"raspberry_pi": {
-  "button_pins": {
-    "1": 4,    ← instrument 1 is wired to GPIO 4
-    "2": 17,
-    "3": 27,
-    ...
-  },
-  "pull_up": true,
+"inputs": {
+  "provider": "modbus_panel",
   "button_cooldown_seconds": 1.5
+},
+"outputs": {
+  "provider": "modbus_panel",
+  "enabled": true
 }
 ```
 
-**Wiring (pull-up configuration):**
-- Connect one leg of each button to the GPIO pin
-- Connect the other leg to **GND**
-- Internal pull-up resistors are used – no external resistors needed
+The Modbus module mapping lives under `modbus_panel.modules`. Keep Box 1 configured while only one module is installed. Add Box 2 only after the second module is physically connected and bench-tested.
 
----
+## Audio Files
 
-## Step 8 – Set Audio Output
+Put WAV files in `audio_files/<song>/` using numbered filenames:
 
-Find your audio device name:
-```bash
-python3 -c "import sounddevice as sd; print(sd.query_devices())"
+```text
+audio_files/
+  song1/
+    1.wav
+    2.wav
+    3.wav
+    4.wav
 ```
 
-Set it in `config.json`:
-```json
-"audio": {
-  "output_device": null
-}
-```
-Leave `null` to use the system default, or set a device name/index from the list above.
+Only instruments with a matching WAV in the current song can become active. If DI5 is pressed but `5.wav` is missing, the app logs a warning and the LED should not stay active for that missing layer.
 
-For USB DAC or HDMI audio you may need to set the default ALSA device:
-```bash
-sudo nano /etc/asound.conf
-```
-```
-defaults.pcm.card 1
-defaults.ctl.card 1
+## Bench Tests
+
+Before running the full app on hardware, verify Modbus IO directly:
+
+```powershell
+python tests/di_monitor.py --ip 192.168.0.200 --port 4196 --slave 1
+python tests/do_chaser.py --ip 192.168.0.200 --port 4196 --slave 1 --delay 0.5 --cycles 3
 ```
 
----
+## Run
 
-## Step 9 – Start and Verify
-
-```bash
-# Check service status
-systemctl --user status audio_looper.service
-
-# View live logs
-journalctl --user -u audio_looper.service -f
-
-# Restart the service
-systemctl --user restart audio_looper.service
+```powershell
+python main.py
 ```
 
-Open the statistics dashboard in a browser:
-```
-http://audiolooper.local:8000
-```
+Expected startup signs:
 
----
+- logging initializes without config errors
+- Modbus bus connects to Box 1
+- Modbus input handler starts for one module
+- LED controller starts for 8 outputs
+- stats server starts on port 8000
 
-## Step 10 – Enable Auto-Start on Boot
+## Web
 
-The installer already does this, but to verify:
-```bash
-systemctl --user is-enabled audio_looper.service
-# Should output: enabled
-```
+The current stats server is available at:
 
-For the service to run **without a logged-in user**, linger must be enabled:
-```bash
-loginctl enable-linger pi
+```text
+http://<rpi-ip>:8000
 ```
 
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| No audio output | Check `audio.output_device` in `config.json`, verify WAV files are in `audio_files/` |
-| Buttons not responding | Check GPIO pin numbers in `config.json`, verify button wiring to GND |
-| Service won't start | Run `journalctl --user -u audio_looper.service --no-pager` for error logs |
-| Web dashboard not accessible | Verify Pi's IP address, check port 8000 is not blocked by firewall |
-| Audio glitches | Increase `jack.buffer_size` in `config.json` (try 2048 or 4096) |
-| Permission denied on GPIO | Run `sudo usermod -aG gpio pi` then reboot |
+The richer room dashboard is planned in `docs/implementation/03_WEB_DASHBOARD.md`.

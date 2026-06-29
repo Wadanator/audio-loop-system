@@ -129,8 +129,27 @@ tests/
   help for `tests/di_monitor.py` and `tests/do_chaser.py` from their new paths.
 - `[pending]` - Run the real hardware app once after the refactor to confirm
   Box 1 DI/DO behavior is unchanged.
-- `[pending]` - Move config loading/validation into `src/audio_loop/config.py`
-  and extract watchdog helper into `src/audio_loop/infra/watchdog.py`.
+- `[implemented] 2026-06-29 10:47:35 +02:00` - Moved config loading and
+  runtime audio-folder validation into `src/audio_loop/config.py`; moved systemd
+  READY/WATCHDOG notification helpers into `src/audio_loop/infra/watchdog.py`.
+  `src/audio_loop/app.py` now imports these helpers instead of owning inline
+  config/watchdog logic.
+- `[implemented] 2026-06-29 10:55:23 +02:00` - Removed the last `raspberry_pi`
+  runtime config key. Button cooldown now belongs to
+  `inputs.button_cooldown_seconds`, `AudioLooper` uses `input_handler` naming,
+  obsolete `install_requirements.py` was deleted, `requirements.txt` was reduced
+  to the actual runtime packages, root shell scripts were rewritten as simple
+  service helpers, and stale active docs were replaced with current Modbus TCP
+  docs.
+- `[verified] 2026-06-29 10:47:35 +02:00` - `py_compile` passed for app,
+  config, watchdog, and package modules; `tests/smoke_refactor.py` passed with
+  a new `audio_loop.config.load_config()` check; the user Python 3.13 imported
+  root `main.py` and resolved `main.main.__module__ == "audio_loop.app"`.
+
+- `[verified] 2026-06-29 10:56:59 +02:00` - `py_compile` passed for `main.py`,
+  changed package modules, and test/bench scripts. `tests/smoke_refactor.py`
+  passed. Config was parsed with PowerShell and confirmed to use
+  `inputs.button_cooldown_seconds` with no `raspberry_pi` key.
 
 ## Implementation steps
 
@@ -147,7 +166,7 @@ tests/
    - Add empty `__init__.py` files.
    - Add `pyproject.toml` or keep simple path setup at first.
 
-3. Move infrastructure first - `[partially implemented] 2026-06-28 22:34:29 +02:00`
+3. Move infrastructure first - `[implemented] 2026-06-29 10:47:35 +02:00`
    - Move `logging_setup.py` to `src/audio_loop/infra/logging_setup.py`.
    - Add `src/audio_loop/infra/paths.py` for runtime paths.
    - Keep `logs/`, `stats.json`, and dashboard static paths anchored to the
@@ -200,13 +219,13 @@ if __name__ == "__main__":
     main()
 ```
 
-10. Move config loading - `[pending]`
+10. Move config loading - `[implemented] 2026-06-29 10:47:35 +02:00`
    - Add `src/audio_loop/config.py`.
    - Centralize:
      - config path
      - validation
      - default values
-     - migration warning for old keys
+     - no compatibility path for old GPIO keys
    - Keep `config.json` readable from the current working directory during the
      transition.
 

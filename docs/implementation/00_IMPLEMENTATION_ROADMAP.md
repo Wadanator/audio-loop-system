@@ -117,9 +117,26 @@ Implementation log:
 - `[implemented] 2026-06-29 10:37:00 +02:00` - Test/bench scripts moved
   into `tests/`; the old `test/` directory and GPIO-only button test were
   removed.
-- `[pending]` - Run the real Box 1 app after the refactor to confirm DI/DO
-  behavior is unchanged, then continue with config/watchdog cleanup or Goal 3
-  dashboard work.
+- `[implemented] 2026-06-29 10:47:35 +02:00` - Goal 2 config/watchdog
+  cleanup completed. Config loading lives in `src/audio_loop/config.py`, systemd
+  notifications live in `src/audio_loop/infra/watchdog.py`, and smoke/import
+  checks passed.
+- `[implemented] 2026-06-29 10:55:23 +02:00` - Clean config/install/docs cleanup completed.
+  Runtime config no longer contains a `raspberry_pi` block; button cooldown now
+  lives under `inputs.button_cooldown_seconds`. `src/audio_loop/app.py` now uses
+  `input_handler` naming, `requirements.txt` no longer includes `pygame`, root
+  shell scripts were refreshed, obsolete `install_requirements.py` and
+  `docs/TODO_rs485_migration.md` were deleted, active docs were rewritten for
+  the current Modbus TCP architecture, and generated `__pycache__` folders were
+  removed.
+- `[verified] 2026-06-29 10:56:59 +02:00` - Syntax check passed for the launcher, changed package
+  modules, and test/bench scripts. `tests/smoke_refactor.py` passed. PowerShell
+  JSON check confirmed `inputs.provider = modbus_panel`,
+  `inputs.button_cooldown_seconds = 1.5`, and no `raspberry_pi` key in
+  `config.json`.
+- `[pending]` - Run the real Box 1 app after the refactor/config cleanup to
+  confirm DI/DO behavior is unchanged, then continue with Goal 3 dashboard work
+  or the remaining runtime safety improvements.
 
 ## Implementation order
 
@@ -257,5 +274,5 @@ in input/output config only.
 ## Done when
 
 - All implementation files are either completed or converted into issues.
-- The old `docs/TODO_rs485_migration.md` is superseded by these files.
+- The old `docs/TODO_rs485_migration.md` was deleted after being superseded by these files.
 - The README points to this roadmap after implementation begins.

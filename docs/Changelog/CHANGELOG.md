@@ -1,136 +1,20 @@
 # Changelog
 
-Tento súbor zaznamenáva všetky zmeny vykonané v projekte **Audio Loop System**.
+## 2026-06-29 - Clean Modbus Development Build
 
----
+- Runtime code moved under `src/audio_loop/`.
+- Root `main.py` is only a launcher.
+- Removed old root compatibility wrappers.
+- Removed the historical direct GPIO input file.
+- Runtime input path is now `inputs.provider = "modbus_panel"`.
+- Runtime output path is now `outputs.provider = "modbus_panel"`.
+- Modbus bus owns one client and one lock per configured module.
+- Box 1 DI1-DI8 verified by user on hardware.
+- Box 1 DO1-DO8 verified by user with the output chaser script.
+- LEDs mirror active audio layers best-effort.
+- Bench scripts live in `tests/`.
+- Implementation plan/log lives in `docs/implementation/`.
 
-## [1.2.1] – 2026-03-10 – Hotfix: Stats Dashboard GIL Starvation
+## Historical Notes
 
-### `stats_server.py`
-- **[FIX]** Replaced `HTTPServer` with `ThreadingHTTPServer`
-  (`socketserver.ThreadingMixIn` + `HTTPServer`) so each HTTP request is
-  handled in its own thread — dashboard now loads correctly while audio is
-  actively playing
-- **Root cause:** `sounddevice` audio callback acquires the Python GIL ~23×/s;
-  single-threaded `HTTPServer` was starved and browser connections timed out
-
----
-
-## [1.2.0] – 2026-03-10 – Code Normalization and Documentation
-
-
-### All Python files (`main.py`, `audio_manager.py`, `looper_engine.py`, `button_handler.py`, `stats_collector.py`, `stats_server.py`, `logging_setup.py`)
-
-- **[NORM]** Applied PEP 8 formatting across all files: 4-space indentation, blank
-  lines between top-level definitions, spacing around operators and commas,
-  trailing whitespace removed, long lines broken where safe
-- **[NORM]** Translated all Slovak comments, docstrings, log strings, and inline
-  notes to clear professional English
-- **[NORM]** Added PEP 257-compliant docstrings to every class, method, and
-  function that was missing one — including `Args:` and `Returns:` sections
-  where applicable
-- **[NORM]** Added brief inline English comments to non-obvious or
-  hardware-specific logic blocks (audio callback wrap-around, debounce state
-  machine, atomic lock strategy, SD card write throttling)
-- **[NORM]** No identifiers renamed, no imports reordered, no logic altered —
-  the refactored code is behaviorally identical to the pre-normalization version
-
----
-
-## [1.1.0] – 2026-03-10 – 24/7 Museum Reliability Fixes
-
-
-### Opravené chyby (Bugfixes)
-
-#### `looper_engine.py`
-- **[FIX P1]** Odstránená vlastná inštancia `StatsCollector()` z `LooperEngine.__init__`
-- Konštruktor teraz prijíma zdieľaný `stats_collector` ako parameter (dependency injection)
-- Predtým mal `LooperEngine` vlastnú kópiu štatistík → záznamy sa nikdy neukladali cez `main.py`
-
-#### `main.py`
-- **[FIX P1]** `StatsCollector` sa vytvára ako jeden zdieľaný objekt a predáva sa do `LooperEngine`
-- **[FIX P4]** Startup správy (`logger.error "Starting..."`) opravené na `logger.warning`
-- **[FIX P4]** Shutdown správy (`logger.error "Shutting down..."`) opravené na `logger.warning`
-- **[FIX P4]** Status log správy opravené na `logger.warning`
-- **[FIX P5]** Pridaná funkcia `_send_watchdog()` – posiela `WATCHDOG=1` systemd signál každých 25 sekúnd
-- **[FIX P5]** Pridaný `READY=1` systemd notify pri spustení (vyžaduje `sdnotify`)
-- **[FIX P8]** Volanie `audio_manager.check_stream_health()` každých 60 sekúnd v hlavnej slučke
-
-#### `audio_manager.py`
-- **[FIX P2]** Pridaný `self.audio_data_lock = threading.Lock()` pre ochranu audio dát
-- **[FIX P2]** `_audio_callback` používa `audio_data_lock.acquire(blocking=False)` – non-blocking ochrana pred race condition pri prepínaní skladieb
-- **[FIX P2]** `_load_current_song` vykonáva atomickú výmenu audio dát pod `audio_data_lock`
-- **[FIX P2]** `shutdown()` čistí `audio_tracks` pod `audio_data_lock`
-- **[FIX P8]** Pridaná metóda `check_stream_health()` – detekuje zamrznutý/mŕtvy audio stream a automaticky ho reštartuje
-
-#### `button_handler.py`
-- **[FIX P3]** Odstránené `time.sleep(self.min_press_duration)` z `_debounce_button()` – blokovalo celé polling vlákno
-- **[FIX P3]** Pridaný dictionary `self.press_start_times` – zaznamenáva čas prvého detekcie stlačenia
-- **[FIX P3]** `_debounce_button` prepísaný na non-blocking state machine: `min_press_duration` sa overuje naprieč polling cyklami bez akéhokoľvek `sleep`
-- **[FIX P3]** Pridaná inicializácia `self.press_start_times[pin] = 0` v `_setup_gpio()`
-
-#### `logging_setup.py`
-- **[FIX P4]** Pridaný `StreamHandler(sys.stdout)` s úrovňou `INFO` – INFO správy idú do journald bez zápisu na SD kartu
-- **[FIX P4]** Opravený komentár (predtým: `memory_handler` sa nepridával; teraz sa `stdout_handler` pridáva)
-- Zmenená log správa pri inicializácii na `logging.info` (nie `logging.error`)
-- Úroveň logu pre `stats_collector` zmenená z `ERROR` na `INFO`
-
-#### `stats_collector.py`
-- **[FIX P4]** `logger.error("Loaded statistics from ...")` → `logger.info(...)` 
-- **[FIX P4]** `logger.warning("No existing stats file found...")` → `logger.info(...)`
-- **[FIX P4]** `logger.error("Stats saved to disk...")` → `logger.info(...)`
-- **[FIX P4]** `logger.error("Stats force-saved to disk")` → `logger.info(...)`
-- **[FIX P4]** `logger.error("Statistics reset to zero")` → `logger.warning(...)`
-- Zachované: `logger.error(...)` pri skutočných chybách (Failed to load/save)
-
-#### `stats_server.py`
-- **[FIX P6]** Pridaná retry slučka (5 pokusov, 10s oneskorenie) okolo `HTTPServer` inicializácie – predtým tiché zlyhanie
-- **[FIX P6]** Každý pokus o obnovu je zalogovaný na `ERROR` úrovni
-- **[FIX P7]** Pridaná metóda `_get_stats()` namiesto `_load_stats()` – číta štatistiky primárne z pamäte cez `stats_collector.get_stats()`
-- **[FIX P7]** Záložné načítanie zo súboru (backward compatibility) ak `stats_collector` nie je dostupný
-- **[FIX P7]** Signatura `run_stats_server(host, port, stats_collector=None)` rozšírená o `stats_collector` parameter
-- **[FIX P7]** Potlačené per-request HTTP access logy (override `log_message`) – menej šumu v journald
-
-#### `install.sh`
-- **[FIX P5]** Pridaná inštalácia `sdnotify` knižnice do pip príkazu
-- **[FIX P5]** Zmenený `Type=simple` → `Type=notify` v systemd unit súbore
-- **[FIX P5]** Pridaný `After=network.target` (stats server potrebuje sieť)
-- **[FIX P5]** Pridaný `StartLimitIntervalSec=120` – ochrana pred nekonečnou reštart slučkou
-- **[FIX P5]** Pridaný `StartLimitBurst=5` – max 5 reštartov za 120 sekúnd
-- **[FIX P5]** Zmenený `RestartSec=5` → `RestartSec=10`
-- **[FIX P5]** Pridaný `WatchdogSec=60` – systemd reštartuje service ak nezíska ping 60s
-
----
-
-## [1.0.0] – Pôvodná verzia
-
-- Základná implementácia audio looper systému pre Raspberry Pi
-- Podpora až 18 WAV track-ov s fade-in/out efektmi
-- GPIO polling-based button handler s debouncing logikou
-- Globálny a per-instrument timeout systém
-- Song rotation po globálnom timeoutt
-- SD karta optimalizovaný logging (RotatingFileHandler, 5MB, 2 backup)
-- Stats server (HTTP dashboard + JSON API)
-- StatsCollector s periodic save (každých 5 minút) a atomic write
-- systemd user service pre autoštart
-
-> KOMENTÁR DOLE MA PLATNOST OD TOHOTO, čiže od 12.4
-[1.3.0] – 2026-04-12 – Thread Safety Fixes and Audio Validation
-looper_engine.py
-
-[FIX P1] Added self._state_lock = threading.Lock() to serialise all state-changing operations
-[FIX P1] handle_button_press now acquires _state_lock for the full critical section — two simultaneous button presses (e.g. two visitors at the same time) can no longer both see system_active == False and both attempt to start playback
-[FIX P1/P3] _deactivate_system and _activate_system are now always called under _state_lock — eliminates race condition between _logic_loop timeout thread and button press callback threads
-[FIX P3] _logic_loop acquires _state_lock only around the timeout check, not during time.sleep(0.2) — audio playback is never blocked by the lock
-[FIX P3] Added re-check of system_active inside the lock in _logic_loop — handles the case where a button press reset the timer while the loop was waiting for the lock
-[FIX] shutdown and force_song_switch also execute under _state_lock for full consistency
-
-audio_manager.py
-
-[FIX P4] _load_current_song now raises ValueError if tracks within one song have inconsistent sample rates — previously the most common rate was silently selected, leaving some tracks pitch/tempo shifted
-[FIX P4] _load_current_song now raises ValueError if the new song's sample rate differs from the already-running audio stream — previously this caused silent audio distortion with no warning
-[FIX P4] switch_to_next_song now rolls back current_song_index and current_song_name on any load failure — system stays on the previous song instead of entering an inconsistent state
-
-> ⚠️ **POZOR – NENAHRANÉ A NETESTOVANÉ**
-> Zmeny v tejto verzii **neboli ešte nasadené na Raspberry Pi** a **neboli reálne otestované**.
-> Pred inštaláciou do múzea je **NUTNÉ** vykonať test na hardvéri.
+Older GPIO-based documentation was removed from the active docs because this project is still in development and does not need backwards compatibility with the original wiring model.

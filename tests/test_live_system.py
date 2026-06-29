@@ -374,7 +374,7 @@ def test_config_valid():
         record(FAIL, "config.json je nevalidný JSON", str(e))
         return
 
-    required_keys = ["raspberry_pi", "timeouts", "jack", "stats_server", "song_rotation"]
+    required_keys = ["inputs", "outputs", "modbus_panel", "timeouts", "jack", "stats_server", "song_rotation"]
     missing = [k for k in required_keys if k not in cfg]
     if missing:
         record(FAIL, "config.json chýbajú povinné kľúče", ", ".join(missing))

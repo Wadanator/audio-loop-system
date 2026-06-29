@@ -1,45 +1,20 @@
 #!/bin/bash
-
-# ==============================================================
-# Audio Looper System - Simple Uninstaller
-# ==============================================================
-
-set -e
+set -euo pipefail
 
 SERVICE_NAME="audio_looper.service"
+SERVICE_FILE="$HOME/.config/systemd/user/$SERVICE_NAME"
 USER_NAME="$(whoami)"
 
-echo "🗑️  Audio Looper System - Uninstaller"
-echo "===================================="
-
-# Stop service
 if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-    echo "🛑 Stopping service..."
     systemctl --user stop "$SERVICE_NAME"
 fi
 
-# Disable service
 if systemctl --user is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
-    echo "❌ Disabling service..."
     systemctl --user disable "$SERVICE_NAME"
 fi
 
-# Remove service file
-SERVICE_FILE="$HOME/.config/systemd/user/$SERVICE_NAME"
-if [[ -f "$SERVICE_FILE" ]]; then
-    echo "🗂️  Removing service file..."
-    rm -f "$SERVICE_FILE"
-fi
-
-# Reload systemd
+rm -f "$SERVICE_FILE"
 systemctl --user daemon-reload
+sudo loginctl disable-linger "$USER_NAME" || true
 
-# Disable linger
-echo "⚡ Disabling user linger..."
-sudo loginctl disable-linger "$USER_NAME"
-
-echo ""
-echo "✅ Audio Looper System has been uninstalled"
-echo ""
-echo "Note: Audio files and project files remain untouched"
-echo "Python packages were not removed (they might be used by other projects)"
+echo "Audio Loop System service removed. Project files and audio files were not deleted."
