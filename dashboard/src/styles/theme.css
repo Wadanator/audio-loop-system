@@ -29,6 +29,8 @@
   --spacing-xl: 20px;
   --spacing-2xl: 24px;
   --spacing-3xl: 32px;
+  --spacing-4xl: 40px;
+  --spacing-5xl: 50px;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.85rem;
   --font-size-md: 0.9rem;
@@ -36,9 +38,15 @@
   --font-size-lg: 1.1rem;
   --font-size-xl: 1.25rem;
   --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.75rem;
+  --font-size-4xl: 2rem;
   --line-height-normal: 1.5;
   --sidebar-width: 260px;
   --content-max-width: 1400px;
+  --login-card-max-width: 420px;
+  --login-logo-size: 80px;
+  --system-card-min-width: 350px;
+  --size-header-icon: 56px;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);

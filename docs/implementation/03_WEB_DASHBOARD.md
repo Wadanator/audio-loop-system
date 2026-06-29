@@ -4,8 +4,10 @@
 
 Add a small React dashboard that looks consistent with `museum-system`, but is
 focused on room operation only. It should show the current song, short runtime
-status, active audio layers, simple INPUT/LED state, activation counts, and allow
-remote "press button" actions.
+status, active audio layers, activation counts, and allow
+remote "press button" actions. The operator UI intentionally does not show
+separate INPUT/LED boxes on each sound card; the active card state and the
+physical button LED are the normal feedback.
 
 The dashboard must be optional. If it crashes, fails to bind, or is not built,
 the DIN buttons and audio playback must still work.
@@ -57,7 +59,7 @@ Do not copy heavy features:
 
 Views:
 
-1. Overview / Prehlad
+1. Overview / Prehľad
    - current song
    - simple system state: ready, playing, or dashboard offline
    - active sound count and a short list of what is running
@@ -69,11 +71,11 @@ Views:
    - grid of audio sounds 1-16
    - each card shows only operator-relevant data:
      - number/name
-     - status: hra, caka, or chyba
+     - status: hrá, čaká, or chýba
      - activation count
-     - INPUT indicator for mapped physical button
-     - LED indicator for mapped output
      - one remote press button
+     - green active card when the sound is playing
+     - no separate INPUT/LED boxes for normal operators
    - do not show module/channel/IP/register details in this view
 
 No operator Diagnostics page is planned for this room dashboard. Technical
@@ -146,22 +148,24 @@ Expected result:
    - Keep the same general language as `museum-system`: dark sidebar, compact
      top status strip, white hero/status card, status color bands, clear cards,
      and Lucide icons.
-   - Keep only the CSS needed for app shell, sidebar, buttons, summary cards,
-     layer cards, and badges.
+   - Keep only the CSS needed for app shell, sidebar, buttons, login, system
+     actions, overview status, layer cards, and badges.
    - Remove unused operator diagnostics styling.
 
-3. Create API service - `[implemented] 2026-06-29 11:20:00 +02:00`
+3. Create API service - `[implemented, auth-header prepared] 2026-06-29 16:25:42 +02:00`
    - `dashboard/src/services/api.js`
    - In production, call same-origin `/api/...` URLs.
    - In development, configure Vite proxy for `/api` and `/health` to avoid
      browser CORS issues while keeping production simple.
+   - API requests include `Authorization` from localStorage `auth_header` when
+     present, matching the `museum-system` frontend shape for later backend auth.
    - Methods:
      - `getStatus`
      - `getLayers`
      - `pressLayer`
      - `getStats`
 
-4. Create components - `[implemented] 2026-06-29 11:40:10 +02:00`
+4. Create components - `[implemented, extended] 2026-06-29 16:25:42 +02:00`
    - `dashboard/src/components/Layout/AppLayout.jsx`
    - `dashboard/src/components/Layout/Sidebar.jsx`
    - `dashboard/src/components/Runtime/RuntimeStatusBar.jsx`
@@ -169,6 +173,8 @@ Expected result:
    - `dashboard/src/components/Overview/OverviewView.jsx`
    - `dashboard/src/components/Layers/LayersView.jsx`
    - `dashboard/src/components/Layers/LayerCard.jsx`
+   - `dashboard/src/components/Auth/LoginView.jsx`
+   - `dashboard/src/components/System/SystemView.jsx`
    - `dashboard/src/components/ui/Button.jsx`
    - `dashboard/src/components/ui/StatusBadge.jsx`
 
@@ -201,10 +207,12 @@ Expected result:
      - `StatsCollector`
      - input/LED status provider if available
 
-3. Add auth only if needed
-   - Development can start with LAN-only access.
-   - Before museum deployment, add simple Basic Auth or token config.
-   - Remote press must be protected before final install.
+3. Add auth only if needed - `[partially implemented in frontend] 2026-06-29 16:25:42 +02:00`
+   - Frontend login panel now matches `museum-system` and uses the same default
+     credentials: `admin` / `admin12321`.
+   - Successful login stores localStorage `auth_header` and API requests send it.
+   - Backend auth enforcement remains pending before final deployment.
+   - Remote press must be protected on the backend before final install.
 
 4. Make web optional - `[implemented] 2026-06-29 11:20:00 +02:00`
    - Config:
@@ -268,11 +276,49 @@ Expected result:
   `src/audio_loop/app.py`, `src/audio_loop/web/server.py`, and dashboard smoke
   tests. `tests/smoke_refactor.py` passed.
 
+- `[implemented, verified] 2026-06-29 16:12:18 +02:00` - Operator cleanup from screenshot review.
+  The Overview page now removes duplicate summary cards (`Aktívne zvuky`,
+  `Pripravené`) and keeps only the compact status/current song/running layers
+  surface. Layer cards no longer show `Zvuk X` twice when the label is the
+  default. `/api/layers` now includes `input_state` from the debounced Modbus DI
+  state and `led_state` from successful DO writes, and the React INPUT/LED
+  indicators use those live states instead of only showing whether a channel is
+  mapped. Removed the now-unused `SummaryCard.jsx` component.
+  Changed files: `src/audio_loop/input/modbus_panel.py`,
+  `src/audio_loop/web/server.py`, `dashboard/src/components/Overview/OverviewView.jsx`,
+  `dashboard/src/components/Overview/OverviewHero.jsx`,
+  `dashboard/src/components/Layers/LayersView.jsx`,
+  `dashboard/src/components/Layers/LayerCard.jsx`,
+  `dashboard/src/styles/components.css`, `tests/smoke_refactor.py`, and the built
+  files under `src/audio_loop/web/static/`.
+  Verification: Python `py_compile` passed, `tests/smoke_refactor.py` passed,
+  and `npm run build` regenerated the production dashboard assets.
+- `[implemented, verified] 2026-06-29 16:25:42 +02:00` - Museum-style login and system tab pass completed.
+  Added the `museum-system`-style login panel with the same default credentials
+  (`admin` / `admin12321`), localStorage `auth_header`, and matching API auth
+  header shape. Added a `Systém` navigation tab with backend/RPi restart and
+  shutdown buttons as UI-only prepared actions; backend command endpoints are
+  intentionally not wired yet. Removed the separate INPUT/LED boxes from sound
+  cards so the operator sees only status, count, and the remote sound button;
+  the green active card and real panel LED remain the normal feedback.
+  Changed files: `src/audio_loop/stats/collector.py`, `tests/smoke_refactor.py`,
+  `dashboard/src/App.jsx`, `dashboard/src/context/AuthContext.jsx`,
+  `dashboard/src/services/api.js`, `dashboard/src/components/Auth/LoginView.jsx`,
+  `dashboard/src/components/System/SystemView.jsx`,
+  `dashboard/src/components/Layout/AppLayout.jsx`,
+  `dashboard/src/components/Layout/Sidebar.jsx`,
+  `dashboard/src/components/Layers/LayerCard.jsx`, `dashboard/src/components/ui/*`,
+  `dashboard/src/styles/theme.css`, `dashboard/src/styles/components.css`, and
+  the built files under `src/audio_loop/web/static/`.
+  Verification: Python `py_compile` passed, `tests/smoke_refactor.py` passed,
+  `npm run build` regenerated `assets/index-D7cLrbf-.js` and
+  `assets/index-r7ljb3CZ.css`, and source scan found no old INPUT/LED layer-card
+  UI tokens in `dashboard/src`.
 ## Acceptance criteria
 
 - Dashboard loads from the Raspberry Pi web server on the same host as the API.
 - Vite development can call the backend through a dev proxy without CORS errors.
-- It shows active sounds within 1-2 seconds.
+- It shows active sounds within 1-2 seconds; physical INPUT/LED details stay in backend API/logs and the active card plus real panel LED are enough for operators.
 - Clicking sound 1 remote press behaves like physical button 1.
 - Physical DIN button press updates dashboard state.
 - Web failure does not stop audio or physical controls.

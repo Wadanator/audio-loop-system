@@ -1,7 +1,18 @@
+function getAuthHeaders() {
+  const headers = { 'Accept': 'application/json' };
+  const authHeader = localStorage.getItem('auth_header');
+
+  if (authHeader) {
+    headers.Authorization = authHeader;
+  }
+
+  return headers;
+}
+
 async function request(path, options = {}) {
   const response = await fetch(path, {
-    headers: { 'Accept': 'application/json', ...(options.headers || {}) },
     ...options,
+    headers: { ...getAuthHeaders(), ...(options.headers || {}) },
   });
 
   let payload = null;

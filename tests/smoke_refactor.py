@@ -257,10 +257,126 @@ def test_stats_collector_ignores_old_layer_keys():
     assert "instrument_17" not in stats
 
 
+def test_stats_collector_replaces_existing_stats_file():
+    stats_module = importlib.import_module("audio_loop.stats.collector")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        stats_path = Path(temp_dir) / "stats.json"
+        stats_path.write_text(
+            json.dumps({"instrument_1": 1}),
+            encoding="utf-8",
+        )
+
+        collector = stats_module.StatsCollector(
+            str(stats_path),
+            max_instruments=16,
+        )
+        collector.record_instrument(1)
+        collector.force_save()
+        saved = json.loads(stats_path.read_text(encoding="utf-8"))
+
+    assert saved["instrument_1"] == 2
+
+def test_modbus_button_status_reports_debounced_input_state():
+    modbus_panel = importlib.import_module("audio_loop.input.modbus_panel")
+
+    class FakeBus:
+        def get_input_mappings(self):
+            return {"box_1": {1: 1}}
+
+        def get_status(self):
+            return {"box_1": {"connected": True}}
+
+    handler = modbus_panel.ModbusButtonHandler(
+        lambda instrument: None,
+        {"modbus_panel": {"enabled": True}},
+        bus=FakeBus(),
+    )
+    handler.channel_states[("box_1", 1)] = modbus_panel._ChannelState(
+        raw=True,
+        stable=True,
+        changed_at=123.0,
+    )
+
+    status = handler.get_button_status()
+
+    assert status["mappings"]["box_1"][1] == 1
+    assert status["states"]["box_1"][1]["stable"] is True
+    assert status["states"]["box_1"][1]["raw"] is True
+
+
+def test_dashboard_layers_payload_uses_live_input_and_led_state():
+    server_module = importlib.import_module("audio_loop.web.server")
+    handler_class = server_module.DashboardRequestHandler
+
+    class FakeEngine:
+        def get_system_status(self):
+            return {
+                "system_active": True,
+                "current_song": {"name": "song1"},
+                "active_instruments": [1],
+                "available_instruments": [1, 2],
+                "session_duration": 0,
+                "time_until_timeout": 60,
+                "total_sessions": 1,
+                "song_rotation_enabled": True,
+            }
+
+    class FakeStats:
+        def get_stats(self):
+            return {"instrument_1": 7, "instrument_2": 0}
+
+    class FakeInput:
+        def get_button_status(self):
+            return {
+                "mappings": {"box_1": {1: 1, 2: 2}},
+                "states": {
+                    "box_1": {
+                        1: {"stable": True, "raw": True, "changed_at": 123.0},
+                        2: {"stable": False, "raw": False, "changed_at": 124.0},
+                    }
+                },
+            }
+
+    class FakeLed:
+        def get_status(self):
+            return {
+                "enabled": True,
+                "mapped_outputs": {1: ("box_1", 1), 2: ("box_1", 2)},
+                "last_output_state": {1: True, 2: False},
+                "last_error": None,
+                "last_error_at": 0,
+            }
+
+    previous_context = handler_class.context
+    handler_class.context = {
+        "looper_engine": FakeEngine(),
+        "stats_collector": FakeStats(),
+        "input_handler": FakeInput(),
+        "led_controller": FakeLed(),
+        "config": {"performance": {"max_concurrent_sounds": 2}},
+    }
+    try:
+        handler = object.__new__(handler_class)
+        payload = handler._layers_payload()
+    finally:
+        handler_class.context = previous_context
+
+    layer_1, layer_2 = payload["layers"]
+    assert layer_1["input_state"] is True
+    assert layer_1["led_state"] is True
+    assert layer_1["stats_count"] == 7
+    assert layer_2["input_state"] is False
+    assert layer_2["led_state"] is False
+
+
 if __name__ == "__main__":
     test_import_main_does_not_import_gpio_or_legacy_wrappers()
     test_config_module_loads_current_config()
     test_stats_collector_ignores_old_layer_keys()
+    test_stats_collector_replaces_existing_stats_file()
+    test_modbus_button_status_reports_debounced_input_state()
+    test_dashboard_layers_payload_uses_live_input_and_led_state()
     test_looper_engine_toggles_layer_after_min_on_window()
     test_looper_engine_ignores_repeat_press_while_locked()
     test_looper_engine_rearms_after_off_cooldown()

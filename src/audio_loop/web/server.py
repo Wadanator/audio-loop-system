@@ -217,7 +217,7 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                     "input_state": bool(input_info and input_info.get("state")),
                     "input_raw_state": bool(input_info and input_info.get("raw_state")),
                     "led_output": output_info,
-                    "led_state": bool(led_states.get(instrument, False)),
+                    "led_state": bool(led_states.get(instrument, led_states.get(str(instrument), False))),
                     "stats_count": int(stats.get(f"instrument_{instrument}", 0)),
                 }
             )

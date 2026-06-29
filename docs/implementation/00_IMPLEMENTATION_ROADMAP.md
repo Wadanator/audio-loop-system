@@ -148,7 +148,15 @@ Implementation log:
   completed. `npm run build` refreshed `src/audio_loop/web/static/`, the static
   bundle no longer contains the old operator Diagnostics UI, Python
   `py_compile` passed, and `tests/smoke_refactor.py` passed.
-- `[pending]` - Run the real Box 1 app after the refactor/config cleanup to
+- `[implemented, verified] 2026-06-29 16:12:18 +02:00` - Goal 3 screenshot cleanup completed. Overview duplicate summary cards were removed, default layer labels no longer repeat `Zvuk X`, `/api/layers` now exposes live `input_state` plus `led_state`, and the React INPUT/LED indicators use those states. `npm run build`, Python `py_compile`, and `tests/smoke_refactor.py` passed. Real Box 1 visual verification remains pending.
+- `[implemented, verified] 2026-06-29 16:25:42 +02:00` - Stats save and dashboard alignment pass completed.
+  `StatsCollector` now uses `os.replace(...)` so Windows can overwrite an
+  existing `stats.json` without `[WinError 183]`, and `tests/smoke_refactor.py`
+  covers that replacement case. The React dashboard now has a `museum-system`-
+  style login panel (`admin` / `admin12321`), sends `auth_header` on API calls,
+  includes a UI-only `Systém` tab for future backend/RPi restart actions, and
+  removes the separate INPUT/LED boxes from sound cards. `py_compile`,
+  `tests/smoke_refactor.py`, and `npm run build` passed.- `[pending]` - Run the real Box 1 app after the refactor/config cleanup to
   confirm DI/DO behavior is unchanged, then continue with Goal 3 dashboard
   verification or the remaining runtime safety improvements.
 - `[reviewed] 2026-06-29 15:34:54 +02:00` - Button feel rework plan corrected

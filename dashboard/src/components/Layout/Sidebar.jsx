@@ -1,11 +1,12 @@
-import { AudioLines, Gauge, Layers3 } from 'lucide-react';
+import { AudioLines, Gauge, Layers3, LogOut, Settings } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Prehľad', icon: Gauge },
   { id: 'layers', label: 'Zvuky', icon: Layers3 },
+  { id: 'system', label: 'Systém', icon: Settings },
 ];
 
-export default function Sidebar({ activeView, onViewChange, offline }) {
+export default function Sidebar({ activeView, onViewChange, offline, onLogout }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -33,9 +34,15 @@ export default function Sidebar({ activeView, onViewChange, offline }) {
         })}
       </nav>
 
-      <div className="sidebar-footer">
-        <span className={`sidebar-state-dot ${offline ? 'is-offline' : 'is-online'}`} />
-        <span>{offline ? 'Backend nedostupný' : 'Backend pripojený'}</span>
+      <div className="sidebar-footer sidebar-footer-stacked">
+        <div className="sidebar-connection-state">
+          <span className={`sidebar-state-dot ${offline ? 'is-offline' : 'is-online'}`} />
+          <span>{offline ? 'Backend nedostupný' : 'Backend pripojený'}</span>
+        </div>
+        <button type="button" className="sidebar-logout" onClick={onLogout}>
+          <LogOut size={15} />
+          <span>Odhlásiť</span>
+        </button>
       </div>
     </aside>
   );

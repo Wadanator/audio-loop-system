@@ -49,7 +49,8 @@ make iteration faster and safer rather than slow everything down.
   - LED controller receives on/off calls
   - LED controller exception does not break audio state
 
-- Config
+- Config and persistence
+  - stats save replaces an existing `stats.json` atomically on Windows/Linux
   - valid Modbus config loads, including per-module `host`/`unit_id`
   - old GPIO config is not part of the accepted runtime config; do not reintroduce it
   - missing audio directory fails clearly
@@ -63,6 +64,14 @@ make iteration faster and safer rather than slow everything down.
   - invalid layer returns 400
   - production API and dashboard are same-origin
   - auth blocks remote press when enabled
+
+## Implementation log
+
+- `[implemented, verified] 2026-06-29 16:25:42 +02:00` - Added smoke coverage for
+  Windows-safe stats persistence. `StatsCollector._save_stats(...)` now uses
+  `os.replace(...)`, and `tests/smoke_refactor.py` verifies that force-saving
+  over an existing `stats.json` succeeds and preserves the incremented count.
+  Verification: Python `py_compile` passed and `tests/smoke_refactor.py` passed.
 
 ## Fake classes to add
 

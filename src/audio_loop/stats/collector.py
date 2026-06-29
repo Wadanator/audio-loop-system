@@ -83,7 +83,7 @@ class StatsCollector:
     def _save_stats(self, force: bool = False):
         """Write statistics to disk if the save policy permits.
 
-        Uses an atomic write (temp file + rename) to prevent data corruption
+        Uses an atomic write (temp file + replace) to prevent data corruption
         if the process is interrupted mid-write.
 
         Args:
@@ -93,13 +93,13 @@ class StatsCollector:
             return
 
         try:
-            # Write to a temp file first, then atomically rename it to
+            # Write to a temp file first, then atomically replace the target to
             # prevent a corrupt stats file if the process is interrupted.
             temp_file = self.stats_file + ".tmp"
             with open(temp_file, 'w') as f:
                 json.dump(self.stats, f, indent=2)
 
-            os.rename(temp_file, self.stats_file)
+            os.replace(temp_file, self.stats_file)
 
             self.last_save_time = time.time()
             self.pending_changes = False
