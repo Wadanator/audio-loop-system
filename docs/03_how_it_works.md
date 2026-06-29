@@ -49,7 +49,7 @@ Loads WAV files and runs the audio stream. The audio callback is kept separate f
 
 Keeps activation counters in memory and saves them periodically.
 
-### `src/audio_loop/web/stats_server.py`
+### `src/audio_loop/web/server.py`
 
 Current lightweight stats HTTP server. The future simplified room dashboard is planned as Goal 3.
 

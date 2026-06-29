@@ -14,7 +14,7 @@ import threading
 from audio_loop.audio.manager import AudioManager
 from audio_loop.config import load_config, validate_runtime_requirements
 from audio_loop.core.looper_engine import LooperEngine
-from audio_loop.web.stats_server import run_stats_server
+from audio_loop.web.server import run_dashboard_server
 from audio_loop.stats.collector import StatsCollector
 from audio_loop.infra.logging_setup import setup_logging
 from audio_loop.infra.watchdog import (
@@ -45,7 +45,7 @@ class AudioLooper:
         self.input_handler = None
         self.modbus_bus = None
         self.led_controller = None
-        self.stats_server_thread = None
+        self.web_server_thread = None
         self.stats_collector = None
 
         self.running = False
@@ -70,13 +70,15 @@ class AudioLooper:
         """Instantiate all subsystem components and wire them together.
 
         A single ``StatsCollector`` instance is created here and passed
-        to both ``LooperEngine`` and ``run_stats_server`` so all parts of
+        to ``LooperEngine`` and the dashboard server so all parts of
         the system share one in-memory stats store.
         """
         try:
             # Create one shared StatsCollector instance that is injected into
             # all components that need it, avoiding duplicated counters.
-            self.stats_collector = StatsCollector()
+            self.stats_collector = StatsCollector(
+                max_instruments=self.config.get('performance', {}).get('max_concurrent_sounds', 16)
+            )
 
             self.audio_manager = AudioManager(self.config)
 
@@ -92,16 +94,22 @@ class AudioLooper:
 
             self.input_handler = self._create_input_handler(self.modbus_bus)
 
-            # Pass the shared stats_collector so the server reads from RAM.
-            self.stats_server_thread = threading.Thread(
-                target=run_stats_server,
-                args=(
-                    self.config['stats_server']['host'],
-                    self.config['stats_server']['port'],
-                    self.stats_collector
-                ),
-                daemon=True
-            )
+            web_config = self.config.get('web', {})
+            if web_config.get('enabled', True):
+                self.web_server_thread = threading.Thread(
+                    target=run_dashboard_server,
+                    kwargs={
+                        'host': web_config['host'],
+                        'port': web_config['port'],
+                        'stats_collector': self.stats_collector,
+                        'looper_engine': self.looper_engine,
+                        'input_handler': self.input_handler,
+                        'led_controller': self.led_controller,
+                        'modbus_bus': self.modbus_bus,
+                        'config': self.config,
+                    },
+                    daemon=True,
+                )
         except Exception as e:
             logger.error(
                 f"Critical component initialization failed: {e}"
@@ -189,7 +197,8 @@ class AudioLooper:
             if self.led_controller:
                 self.led_controller.start()
             self.input_handler.start()
-            self.stats_server_thread.start()
+            if self.web_server_thread:
+                self.web_server_thread.start()
             self.running = True
 
             # Notify systemd that the service is fully initialised.

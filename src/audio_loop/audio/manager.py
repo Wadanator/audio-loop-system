@@ -29,6 +29,11 @@ class AudioManager:
         """
         self.config = config
 
+        self.max_instruments = max(
+            1,
+            int(config.get('performance', {}).get('max_concurrent_sounds', 16)),
+        )
+
         # Song rotation configuration.
         self.song_config = config.get('song_rotation', {})
         self.available_songs = self.song_config.get(
@@ -57,11 +62,11 @@ class AudioManager:
 
         # Per-track volume state for fade-in / fade-out.
         self.master_playing = False
-        self.volumes: Dict[int, float] = {i: 0.0 for i in range(1, 19)}
+        self.volumes: Dict[int, float] = {i: 0.0 for i in self._instrument_numbers()}
         self.target_volumes: Dict[int, float] = {
-            i: 0.0 for i in range(1, 19)
+            i: 0.0 for i in self._instrument_numbers()
         }
-        self.fade_rates: Dict[int, float] = {i: 0.0 for i in range(1, 19)}
+        self.fade_rates: Dict[int, float] = {i: 0.0 for i in self._instrument_numbers()}
 
         # Guards ``song_switch_pending`` and coordinates switch silence.
         self.song_switch_pending = False
@@ -72,6 +77,9 @@ class AudioManager:
         self._validate_song_folders()
         self._load_current_song()
         self._setup_audio_device()
+
+    def _instrument_numbers(self):
+        return range(1, self.max_instruments + 1)
 
     def _validate_song_folders(self):
         """Validate configured song folders and update the available list.
@@ -149,7 +157,7 @@ class AudioManager:
         """Load all WAV tracks for the active song into RAM.
 
         Clears the previous song's data first, reads each ``N.wav``
-        file (1–18), normalises all tracks to the same length, and
+        file within the configured instrument range, normalises all tracks to the same length, and
         atomically replaces the shared audio data under ``audio_data_lock``.
 
         Raises:
@@ -174,8 +182,8 @@ class AudioManager:
                 f"Song directory '{song_dir}' not found."
             )
 
-        # Attempt to load tracks numbered 1 through 18.
-        for i in range(1, 19):
+        # Attempt to load tracks in the configured instrument range.
+        for i in self._instrument_numbers():
             filepath = os.path.join(song_dir, f"{i}.wav")
             if os.path.exists(filepath):
                 try:
@@ -370,7 +378,7 @@ class AudioManager:
             self.audio_data_lock.release()
 
         # Apply linear volume fading for each track toward its target level.
-        for track_id in range(1, 19):
+        for track_id in self._instrument_numbers():
             current_vol = self.volumes[track_id]
             target_vol = self.target_volumes[track_id]
             fade_rate = self.fade_rates[track_id]
@@ -416,7 +424,7 @@ class AudioManager:
             self.song_switch_pending = True
 
             # Silence all tracks immediately during the switch.
-            for i in range(1, 19):
+            for i in self._instrument_numbers():
                 self.volumes[i] = 0.0
                 self.target_volumes[i] = 0.0
 
@@ -544,7 +552,7 @@ class AudioManager:
             finally:
                 self.output_stream = None
 
-        for i in range(1, 19):
+        for i in self._instrument_numbers():
             self.volumes[i] = 0.0
             self.target_volumes[i] = 0.0
 
@@ -603,7 +611,7 @@ class AudioManager:
         """Schedule a linear fade-in for the specified instrument.
 
         Args:
-            instrument: Instrument track number (1–18).
+            instrument: Instrument track number within the configured range.
             duration: Fade duration in seconds.
         """
         if instrument not in self.audio_tracks:
@@ -630,10 +638,10 @@ class AudioManager:
         """Schedule a linear fade-out for the specified instrument.
 
         Args:
-            instrument: Instrument track number (1–18).
+            instrument: Instrument track number within the configured range.
             duration: Fade duration in seconds.
         """
-        if instrument not in range(1, 19):
+        if not 1 <= instrument <= self.max_instruments:
             return
 
         fade_samples = max(1, int(duration * self.sample_rate))
@@ -645,7 +653,7 @@ class AudioManager:
         )
 
     def get_available_instruments(self) -> list:
-        """Return the list of instrument track numbers loaded for the current song.
+        """Return loaded instrument track numbers for the current song.
 
         Returns:
             List of integer track IDs present in ``audio_tracks``.

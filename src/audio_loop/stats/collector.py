@@ -18,15 +18,16 @@ class StatsCollector:
     or when explicitly forced, minimizing SD card wear.
     """
 
-    def __init__(self, stats_file: str = "stats.json"):
+    def __init__(self, stats_file: str = "stats.json", max_instruments: int = 16):
         """Initialize the stats collector.
 
         Args:
             stats_file: Path to the JSON file used for persistent storage.
         """
         self.stats_file = stats_file
+        self.max_instruments = max(1, int(max_instruments))
         self.stats: Dict[str, int] = {
-            f"instrument_{i}": 0 for i in range(1, 19)
+            f"instrument_{i}": 0 for i in range(1, self.max_instruments + 1)
         }
         self.stats.update({
             "command_status": 0,
@@ -50,7 +51,9 @@ class StatsCollector:
             try:
                 with open(self.stats_file, 'r') as f:
                     loaded_stats = json.load(f)
-                    self.stats.update(loaded_stats)
+                    for key, value in loaded_stats.items():
+                        if key in self.stats:
+                            self.stats[key] = value
                 logger.info(f"Loaded statistics from {self.stats_file}")
             except Exception as e:
                 logger.error(
@@ -112,9 +115,9 @@ class StatsCollector:
         to reduce SD card wear.
 
         Args:
-            instrument: Instrument number (1–18).
+            instrument: Instrument number within the configured range.
         """
-        if 1 <= instrument <= 18:
+        if 1 <= instrument <= self.max_instruments:
             key = f"instrument_{instrument}"
             self.stats[key] = self.stats.get(key, 0) + 1
             self.pending_changes = True

@@ -134,9 +134,34 @@ Implementation log:
   JSON check confirmed `inputs.provider = modbus_panel`,
   `inputs.button_cooldown_seconds = 1.5`, and no `raspberry_pi` key in
   `config.json`.
+- `[implemented] 2026-06-29 11:22:08 +02:00` - Goal 3 React dashboard foundation added.
+  Backend API is in `src/audio_loop/web/server.py`, React/Vite source is in
+  `dashboard/`, and `npm run build` outputs production assets to
+  `src/audio_loop/web/static/`. Browser and hardware remote-press verification
+  remain pending.
+- `[implemented] 2026-06-29 11:40:10 +02:00` - Goal 3 operator UI pass applied.
+  The React dashboard now has only `Prehlad` and `Zvuky`, Slovak UI copy,
+  no operator Diagnostics page, simplified layer cards with count/INPUT/LED,
+  and a default 16-sound room target. Changed files are logged in
+  `03_WEB_DASHBOARD.md`.
+- `[verified] 2026-06-29 15:29:30 +02:00` - Goal 3 operator dashboard build and smoke pass
+  completed. `npm run build` refreshed `src/audio_loop/web/static/`, the static
+  bundle no longer contains the old operator Diagnostics UI, Python
+  `py_compile` passed, and `tests/smoke_refactor.py` passed.
 - `[pending]` - Run the real Box 1 app after the refactor/config cleanup to
-  confirm DI/DO behavior is unchanged, then continue with Goal 3 dashboard work
-  or the remaining runtime safety improvements.
+  confirm DI/DO behavior is unchanged, then continue with Goal 3 dashboard
+  verification or the remaining runtime safety improvements.
+- `[reviewed] 2026-06-29 15:34:54 +02:00` - Button feel rework plan corrected
+  against the real code. `03.1_BUTTON_REWORK_TODO.md` now targets `config.json`,
+  16 sounds, a per-instrument engine state machine, removal of redundant timing
+  guards, and conservative Modbus timing defaults until two-box measurement.
+- `[implemented, verified] 2026-06-29 15:44:29 +02:00` - Button feel rework
+  implemented. `LooperEngine` now uses per-instrument states, old cooldown and
+  Modbus double-press guards were removed, config now uses `min_on_seconds` and
+  `rearm_seconds`, runtime/stats/audio paths use the 16-sound config target,
+  and smoke tests cover locked press, rearm cooldown, missing audio, and clean
+  config. Real Box 1 bench verification is still pending.
+- `[implemented, verified] 2026-06-29 15:54:15 +02:00` - Clean-development pass after button rework: runtime docstrings/plans now reflect the 16-sound room target, and `StatsCollector` ignores unknown historical layer keys such as `instrument_17` when loading an old `stats.json`. `py_compile` and `tests/smoke_refactor.py` passed again.
 
 ## Implementation order
 
@@ -164,6 +189,10 @@ Implementation log:
      `museum-system`.
    - Build a much smaller dashboard for active layers and remote button press.
    - Keep remote press routed through the same logic as physical buttons.
+
+3.1. `03.1_BUTTON_REWORK_TODO.md`
+   - Rework button feel with a per-instrument state machine.
+   - Remove redundant old timing guards and keep LED feedback simple.
 
 4. `04_RUNTIME_SAFETY.md`
    - Make sure web failure does not stop physical buttons or audio playback.
@@ -258,19 +287,19 @@ tests/
 
 ## Important design decision
 
-The current code supports 18 instruments. The documented DIN hardware has
-2x Waveshare 8CH modules (one per independent box), so it gives 16 physical
-button channels.
+This room is now planned as a maximum 16-sound installation because the DIN
+hardware target is 2x Waveshare 8CH modules: 16 DI button inputs and 16 DO LED
+outputs.
 
-Implementation should keep 18 audio layers supported, but make physical mapping
-configurable:
+Implementation rules:
 
-- buttons 1-16: DIN panel by default (8 on Box 1, 8 on Box 2)
-- buttons 17-18: web-only, future third module, or disabled by config
-
-Do not hard-code the number 16 into the audio engine. Hardware mapping belongs
-in input/output config only.
-
+- buttons 1-8: Box 1 by default
+- buttons 9-16: Box 2 by default once the second module is added
+- dashboard displays at most 16 sounds for this room
+- audio/config may stay mapping-driven, but the default room target is 16, not
+  the old 18-layer prototype layout
+- do not add compatibility-only files for the older GPIO/prototype structure;
+  this system is still in development, so obsolete files should be deleted
 ## Done when
 
 - All implementation files are either completed or converted into issues.

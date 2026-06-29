@@ -47,6 +47,6 @@ src/audio_loop/
   input/modbus_panel.py
   output/led_panel.py
   stats/collector.py
-  web/stats_server.py
+  web/server.py
   infra/
 ```

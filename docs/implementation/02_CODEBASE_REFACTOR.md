@@ -18,7 +18,7 @@ and runtime safety separately.
   - `src/audio_loop/input/modbus_panel.py`
   - `src/audio_loop/output/led_panel.py`
   - `src/audio_loop/stats/collector.py`
-  - `src/audio_loop/web/stats_server.py`
+  - `src/audio_loop/web/server.py`
   - `src/audio_loop/infra/logging_setup.py`
   - `src/audio_loop/infra/paths.py`
 - `[implemented] 2026-06-29 10:28:27 +02:00` - Clean development policy applied:
@@ -135,8 +135,7 @@ tests/
   `src/audio_loop/app.py` now imports these helpers instead of owning inline
   config/watchdog logic.
 - `[implemented] 2026-06-29 10:55:23 +02:00` - Removed the last `raspberry_pi`
-  runtime config key. Button cooldown now belongs to
-  `inputs.button_cooldown_seconds`, `AudioLooper` uses `input_handler` naming,
+  runtime config key. `AudioLooper` uses `input_handler` naming,
   obsolete `install_requirements.py` was deleted, `requirements.txt` was reduced
   to the actual runtime packages, root shell scripts were rewritten as simple
   service helpers, and stale active docs were replaced with current Modbus TCP
@@ -148,8 +147,7 @@ tests/
 
 - `[verified] 2026-06-29 10:56:59 +02:00` - `py_compile` passed for `main.py`,
   changed package modules, and test/bench scripts. `tests/smoke_refactor.py`
-  passed. Config was parsed with PowerShell and confirmed to use
-  `inputs.button_cooldown_seconds` with no `raspberry_pi` key.
+  passed. Config was parsed with PowerShell and confirmed to have no `raspberry_pi` key. Later button rework replaced the old cooldown setting with `inputs.min_on_seconds` and `inputs.rearm_seconds`.
 
 ## Implementation steps
 
@@ -205,7 +203,7 @@ tests/
      - `create_input_handler(config, callback)`.
 
 8. Move web code - `[partially implemented] 2026-06-28 22:34:29 +02:00`
-   - Move `stats_server.py` into `src/audio_loop/web/`.
+   - Move dashboard/server code into `src/audio_loop/web/`.
    - Later replace it with the fuller dashboard API from Goal 3.
 
 9. Create new app orchestration - `[implemented clean] 2026-06-29 10:28:27 +02:00`
@@ -248,8 +246,8 @@ if __name__ == "__main__":
 
 ## Future cleanup after the move
 
-- Replace hard-coded 18 ranges with `max_instruments` from config, while
-  keeping default 18.
+- `[implemented, verified] 2026-06-29 15:44:29 +02:00` - Replace hard-coded layer ranges with `max_instruments` from config. The current room target is 16 sounds, not the old 18-layer prototype.
+- `[implemented, verified] 2026-06-29 15:54:15 +02:00` - Final cleanup removed old 18-layer wording from runtime docstrings/plans and made `StatsCollector` ignore unknown historical layer keys when loading old stats files.
 - Add type hints to public interfaces.
 - Split `AudioManager` only if it becomes necessary:
   - audio file loading

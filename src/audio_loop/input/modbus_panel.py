@@ -28,7 +28,6 @@ class _ChannelState:
     raw: bool
     stable: bool
     changed_at: float
-    last_trigger_at: float = 0.0
 
 
 class ModbusButtonHandler:
@@ -52,9 +51,6 @@ class ModbusButtonHandler:
         self.debounce_time = self.config.get("debounce_time_ms", 80) / 1000.0
         self.min_press_duration = (
             self.config.get("min_press_duration_ms", 10) / 1000.0
-        )
-        self.double_press_protection = (
-            self.config.get("double_press_protection_ms", 250) / 1000.0
         )
 
         self.bus = bus or ModbusBus(config)
@@ -150,15 +146,6 @@ class ModbusButtonHandler:
         state.stable = state.raw
 
         if state.stable and not previous_stable:
-            if now - state.last_trigger_at < self.double_press_protection:
-                logger.debug(
-                    "Ignoring rapid Modbus press on %s DI%s",
-                    module_name,
-                    channel,
-                )
-                return
-
-            state.last_trigger_at = now
             logger.info(
                 "Modbus press detected: %s DI%s -> instrument %s",
                 module_name,
@@ -172,11 +159,20 @@ class ModbusButtonHandler:
             ).start()
 
     def get_button_status(self):
-        """Return a compact diagnostic snapshot for future web/status use."""
+        """Return mappings plus the last known debounced DI states."""
+        channel_states: Dict[str, Dict[int, dict]] = {}
+        for (module_name, channel), state in self.channel_states.items():
+            channel_states.setdefault(module_name, {})[channel] = {
+                "raw": bool(state.raw),
+                "stable": bool(state.stable),
+                "changed_at": state.changed_at,
+            }
+
         return {
             "mappings": {
                 module_name: channel_map.copy()
                 for module_name, channel_map in self.input_mappings.items()
             },
+            "states": channel_states,
             "bus": self.bus.get_status(),
         }

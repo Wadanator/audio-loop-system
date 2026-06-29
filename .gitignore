@@ -26,3 +26,7 @@ Thumbs.db
 
 # Local systemd overrides
 *.service.local
+
+# Frontend dependencies
+node_modules/
+dashboard/node_modules/

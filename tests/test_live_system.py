@@ -55,7 +55,7 @@ import threading
 PROJECT_ROOT     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SERVICE_NAME     = "audio_looper.service"
-STATS_URL        = "http://localhost:8000/stats"
+STATS_URL        = "http://localhost:8000/api/stats"
 STATS_HTML_URL   = "http://localhost:8000"
 CONFIG_PATH      = os.path.join(PROJECT_ROOT, "config.json")
 STATS_FILE       = os.path.join(PROJECT_ROOT, "stats.json")
@@ -209,7 +209,7 @@ def test_stats_server_html():
     try:
         with urllib.request.urlopen(STATS_HTML_URL, timeout=HTTP_TIMEOUT_S) as resp:
             body = resp.read().decode("utf-8")
-            if resp.status == 200 and "Audio Looper" in body:
+            if resp.status == 200 and "Audio Loop Dashboard" in body:
                 record(PASS, "Stats HTML dashboard je dostupný")
             else:
                 record(WARN,
@@ -219,14 +219,15 @@ def test_stats_server_html():
 
 
 def test_stats_json_valid():
-    """JSON z /stats musí byť parsovateľný a obsahovať správnu štruktúru."""
+    """JSON z /api/stats musi byt parsovatelny a obsahovat stats strukturu."""
     try:
         with urllib.request.urlopen(STATS_URL, timeout=HTTP_TIMEOUT_S) as resp:
             raw = resp.read().decode("utf-8")
-        data = json.loads(raw)
+        payload = json.loads(raw)
+        data = payload.get("stats", payload)
 
         missing = []
-        for i in range(1, 19):
+        for i in range(1, 17):
             key = f"instrument_{i}"
             if key not in data:
                 missing.append(key)
@@ -235,29 +236,30 @@ def test_stats_json_valid():
                 missing.append(cmd)
 
         if not missing:
-            record(PASS, "Stats JSON má správnu štruktúru (18 nástrojov + 3 príkazy)")
+            record(PASS, "Stats JSON ma spravnu strukturu")
         else:
-            record(FAIL, "Stats JSON chýbajú kľúče", ", ".join(missing))
+            record(FAIL, "Stats JSON chybaju kluce", ", ".join(missing))
 
     except json.JSONDecodeError as e:
-        record(FAIL, "Stats JSON nie je validný", str(e))
+        record(FAIL, "Stats JSON nie je validny", str(e))
     except Exception as e:
         record(FAIL, "Stats JSON test zlyhal", str(e))
 
 
 def test_stats_json_values_sane():
-    """Hodnoty v stats musia byť nezáporné celé čísla."""
+    """Hodnoty v stats musia byt nezaporne cele cisla."""
     try:
         with urllib.request.urlopen(STATS_URL, timeout=HTTP_TIMEOUT_S) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+            payload = json.loads(resp.read().decode("utf-8"))
+        data = payload.get("stats", payload)
         bad = {k: v for k, v in data.items()
                if not isinstance(v, int) or v < 0}
         if not bad:
-            record(PASS, "Stats hodnoty sú validné (nezáporné inty)")
+            record(PASS, "Stats hodnoty su validne")
         else:
-            record(FAIL, "Stats obsahujú nevalidné hodnoty", str(bad))
+            record(FAIL, "Stats obsahuju nevalidne hodnoty", str(bad))
     except Exception as e:
-        record(WARN, "Stats hodnoty – nedá sa overiť", str(e))
+        record(WARN, "Stats hodnoty sa nedaju overit", str(e))
 
 
 def test_stats_server_concurrent():
@@ -374,7 +376,7 @@ def test_config_valid():
         record(FAIL, "config.json je nevalidný JSON", str(e))
         return
 
-    required_keys = ["inputs", "outputs", "modbus_panel", "timeouts", "jack", "stats_server", "song_rotation"]
+    required_keys = ["inputs", "outputs", "modbus_panel", "timeouts", "jack", "web", "song_rotation"]
     missing = [k for k in required_keys if k not in cfg]
     if missing:
         record(FAIL, "config.json chýbajú povinné kľúče", ", ".join(missing))

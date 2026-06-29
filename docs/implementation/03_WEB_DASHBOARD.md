@@ -1,10 +1,11 @@
-# Goal 3 - Simple dashboard with remote layer control
+# Goal 3 - Simple operator dashboard with remote layer control
 
 ## Goal
 
-Add a simple web dashboard that looks consistent with `museum-system`, but is
-much smaller. It should show active audio layers, current song/session state,
-button/LED health, and allow remote "press button" actions.
+Add a small React dashboard that looks consistent with `museum-system`, but is
+focused on room operation only. It should show the current song, short runtime
+status, active audio layers, simple INPUT/LED state, activation counts, and allow
+remote "press button" actions.
 
 The dashboard must be optional. If it crashes, fails to bind, or is not built,
 the DIN buttons and audio playback must still work.
@@ -12,6 +13,17 @@ the DIN buttons and audio playback must still work.
 Production is single-RPi and same-origin: the Python process serves both the API
 and the built dashboard. During development, Vite can run separately, but it
 should proxy API calls to the Python backend so production does not need CORS.
+
+UI text is Slovak for the operator. Source code, component names, and comments
+stay English.
+
+## Exact UI reference
+
+Use this project as the concrete design reference:
+
+`C:/Users/Wajdy/Documents/Kodovanie/museum-system/museum-dashboard`
+
+Copy the visual language and useful primitives from there, but keep this room dashboard much smaller.
 
 ## What to copy from museum-system
 
@@ -39,39 +51,37 @@ Do not copy heavy features:
 - Monaco editor
 - full MQTT device management
 - drag and drop libraries
+- technical Diagnostics page for normal operators
 
 ## Target UI scope
 
 Views:
 
-1. Overview
+1. Overview / Prehlad
    - current song
-   - system active / idle
-   - active layer count
+   - simple system state: ready, playing, or dashboard offline
+   - active sound count and a short list of what is running
    - time until global timeout
-   - Modbus panel connection state
+   - Modbus panel state in short form
    - web/backend connection state
 
-2. Layers
-   - grid of audio layers 1-18
-   - each layer shows:
+2. Sounds / Zvuky
+   - grid of audio sounds 1-16
+   - each card shows only operator-relevant data:
      - number/name
-     - available audio file yes/no
-     - active yes/no
-     - physical mapping if present
-     - LED state if known
-   - each layer has a remote press button
+     - status: hra, caka, or chyba
+     - activation count
+     - INPUT indicator for mapped physical button
+     - LED indicator for mapped output
+     - one remote press button
+   - do not show module/channel/IP/register details in this view
 
-3. Diagnostics
-   - last physical press
-   - last remote press
-   - Modbus errors
-   - stats counters
-   - service uptime
+No operator Diagnostics page is planned for this room dashboard. Technical
+information stays in logs, health/status API responses, and developer tooling.
 
 ## Backend API
 
-Replace or extend `stats_server.py` with small JSON routes.
+Replace the old stats-only server with small JSON routes and a static React build server.
 
 Minimum routes:
 
@@ -113,7 +123,7 @@ button press.
 
 Expected result:
 
-- dashboard user clicks layer 4
+- dashboard user clicks sound 4
 - backend calls `handle_button_press(4)`
 - audio layer 4 toggles with normal fade behavior
 - stats record instrument 4 exactly as a physical press would
@@ -122,8 +132,8 @@ Expected result:
 
 ## Frontend implementation steps
 
-1. Create `web-dashboard/` or `dashboard/`
-   - Use Vite + React.
+1. Create `dashboard/` - `[implemented] 2026-06-29 11:20:00 +02:00`
+   - Use Vite + React. Current source path: `dashboard/`.
    - Keep dependencies small:
      - `react`
      - `react-dom`
@@ -132,20 +142,16 @@ Expected result:
    - Avoid React Router until there are multiple real pages. A simple tab state
      is enough.
 
-2. Copy selected CSS/design primitives
-   - Copy the CSS variables from `theme.css`.
-   - Keep a small shared room UI kit so future rooms can reuse the same visual
-     language with different room names, labels, and layer counts.
-   - Copy only the layout and component CSS needed for:
-     - app shell
-     - sidebar or compact nav
-     - buttons
-     - cards
-     - badges
-   - Rename classes if needed to avoid unused large styling.
+2. Copy selected CSS/design primitives - `[implemented] 2026-06-29 11:40:10 +02:00`
+   - Keep the same general language as `museum-system`: dark sidebar, compact
+     top status strip, white hero/status card, status color bands, clear cards,
+     and Lucide icons.
+   - Keep only the CSS needed for app shell, sidebar, buttons, summary cards,
+     layer cards, and badges.
+   - Remove unused operator diagnostics styling.
 
-3. Create API service
-   - `src/services/api.js`
+3. Create API service - `[implemented] 2026-06-29 11:20:00 +02:00`
+   - `dashboard/src/services/api.js`
    - In production, call same-origin `/api/...` URLs.
    - In development, configure Vite proxy for `/api` and `/health` to avoid
      browser CORS issues while keeping production simple.
@@ -155,37 +161,41 @@ Expected result:
      - `pressLayer`
      - `getStats`
 
-4. Create components
-   - `src/components/AppShell.jsx`
-   - `src/components/StatusStrip.jsx`
-   - `src/components/LayerGrid.jsx`
-   - `src/components/LayerCard.jsx`
-   - `src/components/DiagnosticsPanel.jsx`
+4. Create components - `[implemented] 2026-06-29 11:40:10 +02:00`
+   - `dashboard/src/components/Layout/AppLayout.jsx`
+   - `dashboard/src/components/Layout/Sidebar.jsx`
+   - `dashboard/src/components/Runtime/RuntimeStatusBar.jsx`
+   - `dashboard/src/components/Overview/OverviewHero.jsx`
+   - `dashboard/src/components/Overview/OverviewView.jsx`
+   - `dashboard/src/components/Layers/LayersView.jsx`
+   - `dashboard/src/components/Layers/LayerCard.jsx`
+   - `dashboard/src/components/ui/Button.jsx`
+   - `dashboard/src/components/ui/StatusBadge.jsx`
 
-5. Add polling
-   - Poll `/api/status` every 1 second while dashboard is open.
-   - Poll `/api/layers` every 1-2 seconds.
+5. Add polling - `[implemented] 2026-06-29 11:20:00 +02:00`
+   - Poll `/health`, `/api/status`, `/api/layers`, and `/api/stats` every
+     second while dashboard is open.
    - Show stale/offline state if fetch fails.
 
-6. Add lightweight live updates
-   - Prefer Server-Sent Events for status/layer changes once the basic polling
-     API works.
+6. Add lightweight live updates - `[pending]`
+   - Prefer Server-Sent Events for status/layer changes once basic polling is
+     no longer enough.
    - SSE is enough for dashboard feedback and avoids WebSocket complexity.
    - Keep polling as fallback when the SSE stream disconnects.
 
-7. Build static assets
+7. Build static assets - `[verified] 2026-06-29 15:29:30 +02:00`
    - Vite build outputs into Python web static directory:
      - `src/audio_loop/web/static/`
    - Python backend serves the built `index.html` for dashboard paths.
 
 ## Backend implementation steps
 
-1. Replace inline HTML dashboard
+1. Replace inline HTML dashboard - `[implemented] 2026-06-29 11:20:00 +02:00`
    - Keep `/api/stats` compatible with existing stats.
    - Serve built React app for `/` from the same Raspberry Pi backend.
    - Do not require production CORS when frontend and API are same-origin.
 
-2. Inject dependencies into web app
+2. Inject dependencies into web app - `[implemented] 2026-06-29 11:20:00 +02:00`
    - Web routes need references to:
      - `LooperEngine`
      - `StatsCollector`
@@ -196,7 +206,7 @@ Expected result:
    - Before museum deployment, add simple Basic Auth or token config.
    - Remote press must be protected before final install.
 
-4. Make web optional
+4. Make web optional - `[implemented] 2026-06-29 11:20:00 +02:00`
    - Config:
 
 ```json
@@ -213,18 +223,64 @@ Expected result:
    - If disabled, app starts without web thread.
    - If bind fails, log error and keep app running.
 
+## Implementation log
+
+- `[implemented] 2026-06-29 11:20:00 +02:00` - Backend dashboard API started.
+  `src/audio_loop/web/server.py` serves `/health`, `/api/status`, `/api/layers`,
+  `/api/stats`, and `POST /api/layers/<instrument>/press`. Remote press routes
+  call `LooperEngine.handle_button_press(...)` directly.
+- `[implemented] 2026-06-29 11:20:00 +02:00` - Modular React/Vite dashboard
+  source created under `dashboard/`, following the structure and visual language
+  of `C:/Users/Wajdy/Documents/Kodovanie/museum-system/museum-dashboard`.
+  The Python backend serves the built files from `src/audio_loop/web/static/`.
+- `[verified] 2026-06-29 11:23:57 +02:00` - `npm install` completed for
+  `dashboard/` and `npm run build` generated React production assets into
+  `src/audio_loop/web/static/`.
+- `[verified] 2026-06-29 11:23:57 +02:00` - Python `py_compile` passed for
+  `main.py`, `src/audio_loop/app.py`, `src/audio_loop/web/server.py`, and
+  dashboard-related tests. `tests/smoke_refactor.py` passed after the web server
+  rename.
+- `[verified] 2026-06-29 11:25:46 +02:00` - Vite dev server started for the React dashboard and
+  returned HTTP 200 at `http://127.0.0.1:5174`. It will show backend-offline
+  state until the Python backend is running on port 8000.
+- `[implemented] 2026-06-29 11:40:10 +02:00` - Operator UI pass completed in
+  source. Removed the Diagnostics view from navigation/rendering, changed the
+  UI copy to Slovak, limited the dashboard target to 16 sounds, simplified layer
+  cards to status/count/INPUT/LED/remote press, and matched the `museum-system`
+  dashboard visual structure more closely.
+  Changed files: `dashboard/src/App.jsx`, `dashboard/src/components/Layout/Sidebar.jsx`,
+  `dashboard/src/components/Runtime/RuntimeStatusBar.jsx`,
+  `dashboard/src/components/Overview/OverviewHero.jsx`,
+  `dashboard/src/components/Overview/OverviewView.jsx`,
+  `dashboard/src/components/Layers/LayersView.jsx`,
+  `dashboard/src/components/Layers/LayerCard.jsx`,
+  `dashboard/src/styles/components.css`, `src/audio_loop/web/server.py`,
+  `config.json`.
+  Verification: source scan found no `Diagnostics` component references in
+  `dashboard/src`. Production build verification is recorded separately after
+  running `npm run build`.
+- `[verified] 2026-06-29 15:29:30 +02:00` - Production React build completed after the
+  operator UI redesign. `npm run build` in `dashboard/` generated
+  `src/audio_loop/web/static/index.html`, `assets/index-C4OR_I5n.js`, and
+  `assets/index-cEPzPVN-.css`. A source/static scan confirmed no operator
+  `Diagnostics` page or old English dashboard labels remain in the active
+  React source/build. Python `py_compile` passed for `main.py`,
+  `src/audio_loop/app.py`, `src/audio_loop/web/server.py`, and dashboard smoke
+  tests. `tests/smoke_refactor.py` passed.
+
 ## Acceptance criteria
 
 - Dashboard loads from the Raspberry Pi web server on the same host as the API.
 - Vite development can call the backend through a dev proxy without CORS errors.
-- It shows active layers within 1-2 seconds.
-- Clicking layer 1 remote press behaves like physical button 1.
+- It shows active sounds within 1-2 seconds.
+- Clicking sound 1 remote press behaves like physical button 1.
 - Physical DIN button press updates dashboard state.
 - Web failure does not stop audio or physical controls.
 - The visual style clearly matches `museum-system`, but the feature surface is
   much smaller.
-- The room name, layer labels, and diagnostics are configurable per room while
-  the UI structure stays consistent across rooms.
+- The operator UI is Slovak and does not expose technical diagnostics as a
+  normal navigation item.
+- The default dashboard and config target a maximum of 16 sounds for this room.
 
 ## Nice-to-have later
 

@@ -36,7 +36,10 @@ make iteration faster and safer rather than slow everything down.
 
 - `LooperEngine`
   - first press starts system and activates layer
-  - second press toggles same layer off
+  - immediate repeat press during `ON_LOCKED` is ignored
+  - second press after `min_on_seconds` toggles same layer off
+  - press during `OFF_COOLDOWN` is ignored until `rearm_seconds` expires
+  - missing audio does not start an empty session or reset the global timer
   - global timeout deactivates system
   - instrument timeout deactivates only that layer
   - instrument timeout does not reset or incorrectly extend global timeout

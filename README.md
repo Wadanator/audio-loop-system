@@ -5,17 +5,24 @@ The current production/development input path is Modbus TCP, not Raspberry Pi GP
 
 ## Current State
 
-- Audio playback supports up to 18 logical instruments/layers.
+- Audio playback is currently configured for a maximum of 16 room sounds/layers.
 - Box 1 is verified with 8 DI inputs and 8 DO/LED outputs.
 - DI1-DI8 are read from `192.168.0.200:4196`, Modbus unit `1`.
 - DO outputs mirror active audio layers best-effort; LED failures must not stop audio.
 - Root `main.py` is only the launcher. Runtime code lives under `src/audio_loop/`.
+- Dashboard source is a modular React/Vite app in `dashboard/`; the operator UI is Slovak and intentionally minimal (`Prehlad` + `Zvuky`).
 
 ## Structure
 
 ```text
 main.py
 config.json
+dashboard/
+  src/
+    components/
+    hooks/
+    services/
+    styles/
 src/audio_loop/
   app.py
   audio/manager.py
@@ -24,9 +31,11 @@ src/audio_loop/
   input/modbus_panel.py
   output/led_panel.py
   stats/collector.py
-  web/stats_server.py
+  web/server.py
+  web/static/
   infra/logging_setup.py
   infra/paths.py
+  infra/watchdog.py
 tests/
   di_monitor.py
   do_chaser.py
@@ -45,6 +54,25 @@ On this machine the tested command is:
 ```powershell
 C:\Users\Wajdy\AppData\Local\Programs\Python\Python313\python.exe c:/Users/Wajdy/Documents/Kodovanie/audio-loop-system/main.py
 ```
+
+## Dashboard
+
+Build the React dashboard into the Python static directory:
+
+```powershell
+cd dashboard
+npm install
+npm run build
+```
+
+During development, Vite proxies `/api` and `/health` to the Python backend:
+
+```powershell
+cd dashboard
+npm run dev
+```
+
+The backend serves production dashboard files from `src/audio_loop/web/static/`. The UI shows the current song, simple runtime status, active sounds, activation counts, INPUT/LED indicators, and remote press controls for up to 16 sounds.
 
 ## Bench Scripts
 
@@ -78,6 +106,7 @@ Current hardware/software dependency highlights:
 
 - `pymodbus` for Modbus TCP DI/DO.
 - `sounddevice`, `soundfile`, `numpy` for audio playback.
+- `react`, `vite`, and `lucide-react` for the dashboard.
 - No `RPi.GPIO` dependency in the current codebase.
 
 ## Documentation

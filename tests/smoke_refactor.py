@@ -1,13 +1,15 @@
-"""Small smoke tests for the package refactor.
+"""Small smoke tests for the package refactor and button state behavior.
 
 These tests intentionally avoid real audio hardware and Modbus hardware. They
-only verify that imports stay clean and the core button-to-layer behavior still
-works while files move into packages.
+verify that imports stay clean and the core button-to-layer behavior remains
+stable while files move into packages.
 """
 
 import importlib
+import json
 from pathlib import Path
 import sys
+import tempfile
 import types
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -25,9 +27,29 @@ def _stub_audio_dependencies():
         sys.modules["numpy"].ndarray = object
 
 
-def _import_looper_engine():
-    module = importlib.import_module("audio_loop.core.looper_engine")
-    return module.LooperEngine
+def _import_looper_module():
+    return importlib.import_module("audio_loop.core.looper_engine")
+
+
+def _base_config(*, min_on_seconds=0, rearm_seconds=0, max_instruments=16):
+    return {
+        "timeouts": {
+            "global_timeout": 75,
+            "instrument_timeout": 60,
+            "fade_duration": 2,
+        },
+        "inputs": {
+            "min_on_seconds": min_on_seconds,
+            "rearm_seconds": rearm_seconds,
+        },
+        "performance": {
+            "max_concurrent_sounds": max_instruments,
+        },
+        "song_rotation": {
+            "enable": False,
+            "switch_on_global_timeout": False,
+        },
+    }
 
 
 class FakeAudioManager:
@@ -86,6 +108,26 @@ class FakeLedController:
         self.events.append(("sync", list(active_layers)))
 
 
+def _make_engine(*, min_on_seconds=0, rearm_seconds=0, available=None):
+    _stub_audio_dependencies()
+    module = _import_looper_module()
+    audio = FakeAudioManager()
+    if available is not None:
+        audio.available = available
+    stats = FakeStatsCollector()
+    leds = FakeLedController()
+    engine = module.LooperEngine(
+        audio,
+        _base_config(
+            min_on_seconds=min_on_seconds,
+            rearm_seconds=rearm_seconds,
+        ),
+        stats,
+        led_controller=leds,
+    )
+    return module, engine, audio, stats, leds
+
+
 def test_import_main_does_not_import_gpio_or_legacy_wrappers():
     _stub_audio_dependencies()
     sys.modules.pop("button_handler", None)
@@ -112,28 +154,12 @@ def test_import_main_does_not_import_gpio_or_legacy_wrappers():
         assert not (PROJECT_ROOT / module_file).exists(), module_file
 
 
-def test_looper_engine_toggles_layer_with_fake_dependencies():
-    _stub_audio_dependencies()
-    LooperEngine = _import_looper_engine()
-    audio = FakeAudioManager()
-    stats = FakeStatsCollector()
-    leds = FakeLedController()
-    config = {
-        "timeouts": {
-            "global_timeout": 75,
-            "instrument_timeout": 60,
-            "fade_duration": 2,
-        },
-        "inputs": {
-            "button_cooldown_seconds": 0,
-        },
-        "song_rotation": {
-            "enable": False,
-            "switch_on_global_timeout": False,
-        },
-    }
+def test_looper_engine_toggles_layer_after_min_on_window():
+    _, engine, audio, stats, leds = _make_engine(
+        min_on_seconds=0,
+        rearm_seconds=0,
+    )
 
-    engine = LooperEngine(audio, config, stats, led_controller=leds)
     engine.handle_button_press(1)
     engine.handle_button_press(1)
 
@@ -145,18 +171,98 @@ def test_looper_engine_toggles_layer_with_fake_dependencies():
     assert ("layer", 1, False) in leds.events
 
 
+def test_looper_engine_ignores_repeat_press_while_locked():
+    module, engine, audio, stats, leds = _make_engine(
+        min_on_seconds=10,
+        rearm_seconds=0,
+    )
+
+    engine.handle_button_press(1)
+    engine.handle_button_press(1)
+
+    assert audio.events.count(("fade_in", 1, 2)) == 1
+    assert ("fade_out", 1, 2) not in audio.events
+    assert stats.recorded == [1]
+    assert engine.instrument_states[1] == module.InstrumentState.ON_LOCKED
+    assert ("layer", 1, True) in leds.events
+    assert ("layer", 1, False) not in leds.events
+
+
+def test_looper_engine_rearms_after_off_cooldown():
+    module, engine, audio, stats, _ = _make_engine(
+        min_on_seconds=0,
+        rearm_seconds=10,
+    )
+
+    engine.handle_button_press(1)
+    engine.handle_button_press(1)
+    engine.handle_button_press(1)
+
+    assert audio.events.count(("fade_in", 1, 2)) == 1
+    assert audio.events.count(("fade_out", 1, 2)) == 1
+    assert engine.instrument_states[1] == module.InstrumentState.OFF_COOLDOWN
+
+    engine.instrument_deactivated_at[1] -= 11
+    engine.handle_button_press(1)
+
+    assert audio.events.count(("fade_in", 1, 2)) == 2
+    assert stats.recorded == [1, 1]
+
+
+def test_missing_audio_does_not_start_empty_session():
+    _, engine, audio, stats, leds = _make_engine(available=[])
+
+    engine.handle_button_press(1)
+
+    assert audio.events == []
+    assert stats.recorded == []
+    assert leds.events == []
+    assert engine.get_system_status()["system_active"] is False
+
+
 def test_config_module_loads_current_config():
     config_module = importlib.import_module("audio_loop.config")
     config = config_module.load_config()
 
     assert config["inputs"]["provider"] == "modbus_panel"
-    assert config["inputs"]["button_cooldown_seconds"] == 1.5
+    assert config["inputs"]["min_on_seconds"] == 1.5
+    assert config["inputs"]["rearm_seconds"] == 0.2
+    assert "button_cooldown_seconds" not in config["inputs"]
+    assert "debouncing" not in config
+    assert "double_press_protection_ms" not in config["modbus_panel"]
+    assert config["modbus_panel"]["poll_interval_ms"] == 50
+    assert config["modbus_panel"]["debounce_time_ms"] == 40
+    assert config["performance"]["max_concurrent_sounds"] == 16
     assert "raspberry_pi" not in config
     assert config["outputs"]["provider"] == "modbus_panel"
+
+
+def test_stats_collector_ignores_old_layer_keys():
+    stats_module = importlib.import_module("audio_loop.stats.collector")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        stats_path = Path(temp_dir) / "stats.json"
+        stats_path.write_text(
+            json.dumps({"instrument_1": 5, "instrument_17": 99}),
+            encoding="utf-8",
+        )
+
+        collector = stats_module.StatsCollector(
+            str(stats_path),
+            max_instruments=16,
+        )
+        stats = collector.get_stats()
+
+    assert stats["instrument_1"] == 5
+    assert "instrument_17" not in stats
 
 
 if __name__ == "__main__":
     test_import_main_does_not_import_gpio_or_legacy_wrappers()
     test_config_module_loads_current_config()
-    test_looper_engine_toggles_layer_with_fake_dependencies()
+    test_stats_collector_ignores_old_layer_keys()
+    test_looper_engine_toggles_layer_after_min_on_window()
+    test_looper_engine_ignores_repeat_press_while_locked()
+    test_looper_engine_rearms_after_off_cooldown()
+    test_missing_audio_does_not_start_empty_session()
     print("smoke_refactor ok")

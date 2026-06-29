@@ -27,8 +27,8 @@ adding Box 2 and the full 16-input panel.
   read over Modbus TCP on Windows, without RPi GPIO.
 - `LooperEngine.handle_button_press(instrument_num)` is already the correct
   shared entry point for any input source.
-- `LooperEngine.instrument_active` already tracks active layers.
-- `stats_server.py` is only a stats page and has no remote control API.
+- `LooperEngine` now tracks active layers through a per-instrument state machine (`off_ready`, `on_locked`, `on_ready`, `off_cooldown`).
+- `src/audio_loop/web/server.py` now provides dashboard API routes and remote press control.
 
 ## Hardware target
 
@@ -51,7 +51,7 @@ Default mapping:
 | ----------- | --------------------------------- | --------------------------- |
 | 1-8         | Box 1 (IP`.200`), unit `0x01` | DI/DO 1-8                   |
 | 9-16        | Box 2 (IP`.201`), unit `0x01` | DI/DO 1-8                   |
-| 17-18       | none by default                   | web-only or future hardware |
+| >16         | not used                          | keep this room at 16 sounds |
 
 ## Implementation rollout
 
@@ -136,10 +136,9 @@ module since the boxes are distinguished by IP, not by Modbus address:
   "modbus_panel": {
     "enabled": true,
     "port": 4196,
-    "poll_interval_ms": 75,
-    "debounce_time_ms": 80,
+    "poll_interval_ms": 50,
+    "debounce_time_ms": 40,
     "min_press_duration_ms": 10,
-    "double_press_protection_ms": 250,
     "modules": [
       {
         "name": "box_1",
@@ -190,10 +189,10 @@ production/development input path is now `inputs.provider = "modbus_panel"`.
 
 Start conservatively on real DIN hardware:
 
-- `poll_interval_ms`: begin at 75 ms, acceptable starting range 50-100 ms.
+- `poll_interval_ms`: begin at 50 ms, acceptable starting range 50-100 ms.
 - Measure each box's Ethernet-to-RS485 module latency before lowering below
   50 ms.
-- `double_press_protection_ms` is per physical channel, never global.
+- `double_press_protection_ms` was removed; contextual press protection now lives in `LooperEngine`.
 - A press on button 1 must not delay or block button 2, even when they live
   on different boxes.
 - Because Box 1 and Box 2 are independent TCP connections, polling one box
