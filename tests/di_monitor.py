@@ -8,8 +8,8 @@ Požiadavky:
     pip install pymodbus
 
 Použitie:
-    python di_monitor.py
-    python di_monitor.py --ip 192.168.1.200 --port 502 --slave 1
+    python tests/di_monitor.py
+    python tests/di_monitor.py --ip 192.168.1.200 --port 502 --slave 1
 """
 
 import time

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compatibility entry point for the refactored audio_loop package."""
+"""Project entry point for the audio_loop package."""
 
 from pathlib import Path
 import sys

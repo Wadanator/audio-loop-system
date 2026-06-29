@@ -26,10 +26,7 @@ def _stub_audio_dependencies():
 
 
 def _import_looper_engine():
-    try:
-        module = importlib.import_module("audio_loop.core.looper_engine")
-    except ModuleNotFoundError:
-        module = importlib.import_module("looper_engine")
+    module = importlib.import_module("audio_loop.core.looper_engine")
     return module.LooperEngine
 
 
@@ -89,7 +86,7 @@ class FakeLedController:
         self.events.append(("sync", list(active_layers)))
 
 
-def test_import_main_does_not_import_gpio():
+def test_import_main_does_not_import_gpio_or_legacy_wrappers():
     _stub_audio_dependencies()
     sys.modules.pop("button_handler", None)
     sys.modules.pop("RPi", None)
@@ -99,6 +96,20 @@ def test_import_main_does_not_import_gpio():
 
     assert "button_handler" not in sys.modules
     assert "RPi.GPIO" not in sys.modules
+
+    removed_root_modules = [
+        "audio_manager.py",
+        "button_handler.py",
+        "logging_setup.py",
+        "looper_engine.py",
+        "modbus_bus.py",
+        "modbus_button_handler.py",
+        "modbus_led_controller.py",
+        "stats_collector.py",
+        "stats_server.py",
+    ]
+    for module_file in removed_root_modules:
+        assert not (PROJECT_ROOT / module_file).exists(), module_file
 
 
 def test_looper_engine_toggles_layer_with_fake_dependencies():
@@ -134,6 +145,6 @@ def test_looper_engine_toggles_layer_with_fake_dependencies():
     assert ("layer", 1, False) in leds.events
 
 if __name__ == "__main__":
-    test_import_main_does_not_import_gpio()
+    test_import_main_does_not_import_gpio_or_legacy_wrappers()
     test_looper_engine_toggles_layer_with_fake_dependencies()
     print("smoke_refactor ok")

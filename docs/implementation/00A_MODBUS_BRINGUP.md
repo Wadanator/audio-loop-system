@@ -13,7 +13,7 @@ small test scripts.
 ## Current hardware status
 
 As of the current bench test, one Waveshare IO 8CH module is already working
-through `test/di_monitor.py`:
+through `tests/di_monitor.py`:
 
 - current tested IP: `192.168.0.200`
 - current tested TCP port: `4196`
@@ -28,10 +28,14 @@ register DI state changes first, without audio, GPIO, LED logic, or web UI.
 
 Implementation log:
 
-- `[verified] 2026-06-28 21:55:36 +02:00` - `test/di_monitor.py` is confirmed
+- `[verified] 2026-06-28 21:55:36 +02:00` - `tests/di_monitor.py` is confirmed
   by bench testing to read all 8 DI channels from Box 1.
-- `[implemented + verified] 2026-06-28 21:55:36 +02:00` - `test/do_chaser.py`
+- `[implemented + verified] 2026-06-28 21:55:36 +02:00` - `tests/do_chaser.py`
   exists and has been confirmed by bench testing to switch DO outputs in order.
+- `[implemented + verified] 2026-06-29 10:37:00 +02:00` - Bench scripts
+  were moved from `test/` to `tests/`; current paths are `tests/di_monitor.py`
+  and `tests/do_chaser.py`. Both scripts show `--help` successfully through the
+  user Python 3.13 interpreter from their new paths.
 - `[pending]` - repeat the same DI/DO bring-up on Box 2 when that module is
   wired.
 
@@ -77,7 +81,7 @@ connections, one per box.
      its own IP
    - read DI1
    - write DO1 / LED1
-   - run the DO1 -> DO8 output chaser with `test/do_chaser.py`
+   - run the DO1 -> DO8 output chaser with `tests/do_chaser.py`
    - connect one physical button and verify press/release
 
 2. Second IO box independently (Box 2)
@@ -316,7 +320,7 @@ Use this after adding more temporary buttons to one box.
 
 ## Script 3 - output chaser for all 8 DO channels
 
-Actual file: `test/do_chaser.py`.
+Actual file: `tests/do_chaser.py`.
 
 This tests the output side independently from the audio system. It turns on only
 one output at a time, from DO1 to DO8, with a delay between steps. This is the
@@ -326,7 +330,7 @@ is really active.
 Run against the currently working Box 1:
 
 ```bash
-python test/do_chaser.py --ip 192.168.0.200 --port 4196 --slave 1 --delay 0.5 --cycles 3
+python tests/do_chaser.py --ip 192.168.0.200 --port 4196 --slave 1 --delay 0.5 --cycles 3
 ```
 
 Expected:
@@ -339,7 +343,7 @@ Expected:
 Use `--cycles 0` for an infinite chaser while checking wiring:
 
 ```bash
-python test/do_chaser.py --cycles 0
+python tests/do_chaser.py --cycles 0
 ```
 
 If some LED does not match the expected channel, fix the wiring/mapping before
@@ -488,7 +492,7 @@ Expected:
 - Box 2 responds through Modbus TCP at its own IP, independently of Box 1.
 - One physical button press per box is visible in DI reads.
 - One LED/backlight can be controlled through DO writes, on each box.
-- All 8 DO outputs on the working module pass the `test/do_chaser.py` sequence.
+- All 8 DO outputs on the working module pass the `tests/do_chaser.py` sequence.
 - Both boxes can be read and written concurrently from one Python process
   without interference, confirming the two-independent-endpoints topology.
 - No audio-system code is required for these tests.

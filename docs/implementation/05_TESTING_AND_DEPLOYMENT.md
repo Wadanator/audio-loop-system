@@ -48,7 +48,7 @@ make iteration faster and safer rather than slow everything down.
 
 - Config
   - valid Modbus config loads, including per-module `host`/`unit_id`
-  - old GPIO config gives migration warning
+  - old GPIO config is rejected or ignored with a clear migration warning
   - missing audio directory fails clearly
   - web disabled config starts without web
   - with two modules configured, one offline module can be marked degraded
@@ -177,7 +177,6 @@ Create `scripts/verify_dashboard.py`:
 
 5. Leave development escape hatches
    - Keep web-only input disabled by default, but available for bench tests.
-   - Keep GPIO legacy handler only if needed for local testing.
    - Keep verification scripts in repo.
 
 ## Acceptance criteria

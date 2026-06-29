@@ -9,9 +9,9 @@ Requirements:
     pip install pymodbus
 
 Usage:
-    python test/do_chaser.py
-    python test/do_chaser.py --ip 192.168.0.200 --port 4196 --slave 1
-    python test/do_chaser.py --delay 0.5 --cycles 5
+    python tests/do_chaser.py
+    python tests/do_chaser.py --ip 192.168.0.200 --port 4196 --slave 1
+    python tests/do_chaser.py --delay 0.5 --cycles 5
 """
 
 import argparse

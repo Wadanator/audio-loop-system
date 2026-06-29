@@ -74,7 +74,7 @@ endpoints**, not as one endpoint addressing two unit IDs on a shared bus.
 
 ## Current implementation milestone
 
-One external IO module is already confirmed working via `test/di_monitor.py`.
+One external IO module is already confirmed working via `tests/di_monitor.py`.
 The current software milestone is Phase A of `01_DIN_MODBUS_BUTTONS.md`: remove
 RPi GPIO from the production startup path and accept external Modbus DI events
 from the working 8-channel module. That path must run on Windows as well as on
@@ -83,9 +83,10 @@ Raspberry Pi.
 Implementation log:
 
 - `[implemented] 2026-06-28 21:55:36 +02:00` - Phase A code path created.
-  `main.py` now creates `modbus_panel`, `modbus_button_handler.py` was added,
-  `config.json` points to `box_1` at `192.168.0.200:4196`, and normal install
-  dependencies no longer include `RPi.GPIO`.
+  `main.py` now creates `modbus_panel`, the Modbus input handler was added
+  and later moved to `src/audio_loop/input/modbus_panel.py`, `config.json`
+  points to `box_1` at `192.168.0.200:4196`, and normal install dependencies
+  no longer include `RPi.GPIO`.
 - `[verified] 2026-06-28 22:11:36 +02:00` - Full app started on Windows with
   Box 1 connected. Real DI presses were logged through the running app for
   multiple channels (`DI1`, `DI3`, `DI4`, `DI6`, `DI7`, `DI8`) and reached
@@ -106,10 +107,16 @@ Implementation log:
   5-8 are unavailable in the current `song1` audio set and correctly log
   warnings without activating or crashing.
 - `[implemented] 2026-06-28 22:34:29 +02:00` - Goal 2 refactor first pass
-  completed. Runtime modules moved under `src/audio_loop/`, root files are
-  compatibility wrappers, `python main.py` still imports `audio_loop.app`, and
-  smoke/import checks passed. Real Box 1 hardware retest after refactor is
-  still pending.
+  completed. Runtime modules moved under `src/audio_loop/`, `python main.py`
+  imports `audio_loop.app`, and smoke/import checks passed. Real Box 1 hardware
+  retest after refactor is still pending.
+- `[implemented] 2026-06-29 10:28:27 +02:00` - Clean development policy applied:
+  old root compatibility wrappers and the historical GPIO `button_handler.py`
+  were removed. Future refactor work should prefer deleting obsolete files over
+  preserving unused old entry points.
+- `[implemented] 2026-06-29 10:37:00 +02:00` - Test/bench scripts moved
+  into `tests/`; the old `test/` directory and GPIO-only button test were
+  removed.
 - `[pending]` - Run the real Box 1 app after the refactor to confirm DI/DO
   behavior is unchanged, then continue with config/watchdog cleanup or Goal 3
   dashboard work.
@@ -226,7 +233,9 @@ tests/
 - Web remote press must behave exactly like a physical button press.
 - Button LED state must reflect currently active audio layers.
 - Startup should be useful in development even before final museum install.
-- Refactor should be incremental: move first, change behavior second.
+- Refactor should be incremental, but because the system is still in
+  development, obsolete compatibility files should be deleted instead of kept
+  indefinitely.
 - The panel is two independent Modbus TCP endpoints (one per box). One box
   being unreachable must not prevent the other box from working.
 

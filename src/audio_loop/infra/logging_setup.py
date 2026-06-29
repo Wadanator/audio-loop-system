@@ -61,7 +61,6 @@ def setup_logging():
     # Reduce verbosity for modules that produce high-frequency log entries.
     logging.getLogger('audio_manager').setLevel(logging.WARNING)
     logging.getLogger('audio_loop.audio.manager').setLevel(logging.WARNING)
-    logging.getLogger('button_handler').setLevel(logging.WARNING)
     logging.getLogger('looper_engine').setLevel(logging.WARNING)
     logging.getLogger('audio_loop.core.looper_engine').setLevel(logging.WARNING)
     logging.getLogger('stats_collector').setLevel(logging.INFO)

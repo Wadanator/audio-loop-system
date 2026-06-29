@@ -18,11 +18,12 @@ adding Box 2 and the full 16-input panel.
 
 ## Current state
 
-- `button_handler.py` still exists as historical GPIO code, but `main.py` no
-  longer imports it or creates `UniversalButtonHandler`.
+- `[implemented] 2026-06-29 10:28:27 +02:00` - Historical GPIO
+  `button_handler.py` has been deleted. Direct RPi GPIO input is no longer kept
+  in the codebase.
 - `main.py` now creates the configured external input provider; for Phase A
   that provider is `modbus_panel`.
-- `test/di_monitor.py` already proves that the first external IO module can be
+- `tests/di_monitor.py` already proves that the first external IO module can be
   read over Modbus TCP on Windows, without RPi GPIO.
 - `LooperEngine.handle_button_press(instrument_num)` is already the correct
   shared entry point for any input source.
@@ -68,17 +69,17 @@ Default mapping:
 ## Implementation log
 
 - `[implemented] 2026-06-28 21:55:36 +02:00` - Added
-  `modbus_button_handler.py`, a cross-platform Modbus DI input handler based on
-  the proven `test/di_monitor.py` rising-edge pattern.
+  `src/audio_loop/input/modbus_panel.py`, a cross-platform Modbus DI input
+  handler based on the proven `tests/di_monitor.py` rising-edge pattern.
 - `[implemented] 2026-06-28 21:55:36 +02:00` - Updated `main.py` so the app no
-  longer imports `button_handler.py`/GPIO in the startup path and creates the
-  configured `modbus_panel` input provider.
+  no longer imports GPIO in the startup path and creates the configured
+  `modbus_panel` input provider.
 - `[implemented] 2026-06-28 21:55:36 +02:00` - Updated `config.json` for Phase
   A with only `box_1` at `192.168.0.200:4196`, mapped to instruments 1-8.
 - `[implemented] 2026-06-28 21:55:36 +02:00` - Removed `RPi.GPIO` from normal
   install dependencies and added/kept `pymodbus` for Modbus TCP input.
 - `[verified] 2026-06-28 21:55:36 +02:00` - Syntax checks passed for `main.py`,
-  `modbus_button_handler.py`, and `install_requirements.py`; `config.json`
+  `src/audio_loop/input/modbus_panel.py`, and `install_requirements.py`; `config.json`
   parses and points to `modbus_panel` / `box_1`.
 - `[verified] 2026-06-28 22:11:36 +02:00` - Full app was started on Windows
   using Python 3.13 with Box 1 online. Logs confirmed Modbus connection to
@@ -99,8 +100,9 @@ Default mapping:
   `config.json` so `inputs` and `outputs` both use `modbus_panel` through the
   same shared `ModbusBus` instance.
 - `[verified] 2026-06-28 22:11:36 +02:00` - `py_compile` passed for `main.py`,
-  `looper_engine.py`, `modbus_bus.py`, `modbus_button_handler.py`, and
-  `modbus_led_controller.py`; `config.json` parses with one configured module;
+  `src/audio_loop/core/looper_engine.py`, `src/audio_loop/hardware/modbus_bus.py`,
+  `src/audio_loop/input/modbus_panel.py`, and `src/audio_loop/output/led_panel.py`;
+  `config.json` parses with one configured module;
   a fake-bus smoke test confirmed one rising-edge press and LED DO1 ON/OFF
   writes.
 - `[implemented] 2026-06-28 22:16:02 +02:00` - Fixed a startup regression from
@@ -181,8 +183,8 @@ individual module only if a later box is configured differently.
 For Phase A, it is valid to keep only the `box_1` entry in `modules`. The code
 must not require `box_2` to exist before the first 8-button version works.
 
-Keep old `raspberry_pi.button_pins` only as temporary legacy/dev config until
-the refactor is complete. It must not be the production default.
+Do not reintroduce old `raspberry_pi.button_pins` or direct GPIO config. The
+production/development input path is now `inputs.provider = "modbus_panel"`.
 
 ## Polling and debounce policy
 
@@ -250,9 +252,9 @@ problems cannot stall the other box's traffic.
      - `sync_from_active_layers(active_layers)`
 4. Implement Modbus panel client - `[partially implemented] 2026-06-28 21:55:36 +02:00`
 
-   - Phase A file currently exists as root-level `modbus_button_handler.py`; move it to `input/modbus_panel.py` during the later package refactor.
-   - New module: `input/modbus_panel.py`
-   - Start from the proven `test/di_monitor.py` behavior: read 8 DI bits,
+   - Current implementation file is `src/audio_loop/input/modbus_panel.py`.
+   - Module: `src/audio_loop/input/modbus_panel.py`
+   - Start from the proven `tests/di_monitor.py` behavior: read 8 DI bits,
      remember the previous state, and emit a press only on `False -> True`.
    - Use the shared Modbus bus service, not a raw client.
    - For each configured module, connect to its own `host:port` and read 8
@@ -264,7 +266,8 @@ problems cannot stall the other box's traffic.
    - Translate `(module_name, channel)` into `instrument_num` using the
      `channels` mapping for that module - `unit_id` is not the distinguishing
      key here, since both boxes use the same one.
-   - Apply the existing debounce rules from `button_handler.py`.
+   - Apply the documented debounce policy from this file; old GPIO
+     `button_handler.py` has been deleted.
    - On valid rising edge, call `LooperEngine.handle_button_press`.
    - Keep one debounce/double-press state per configured channel.
    - Add connection state and reconnect support, per module independently:
@@ -281,7 +284,7 @@ problems cannot stall the other box's traffic.
      correct module's client.
    - Treat LEDs as real state indicators, not decorative feedback: a lit LED
      means the corresponding audio layer is currently playing/active.
-   - Use `test/do_chaser.py` before integration to confirm DO1-DO8 mapping.
+   - Use `tests/do_chaser.py` before integration to confirm DO1-DO8 mapping.
    - Write DO coils for LED state:
      - active layer -> LED on
      - inactive layer -> LED off
@@ -309,10 +312,10 @@ problems cannot stall the other box's traffic.
    - Do not import `RPi.GPIO` when using Modbus provider.
 8. Retire GPIO from the app startup path - `[implemented] 2026-06-28 21:55:36 +02:00`
 
-   - Do not import `button_handler.py` from `main.py`.
+   - Do not reintroduce `button_handler.py` or any RPi GPIO import.
    - Do not install `RPi.GPIO` as a normal dependency.
-   - Keep old GPIO code only as historical reference until it is deleted in a
-     later cleanup pass.
+   - Old GPIO code has been deleted; do not keep a compatibility GPIO path during
+     development.
    - The only supported input provider for this implementation step is
      `modbus_panel`.
 9. Add verification script

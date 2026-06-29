@@ -4,8 +4,8 @@
 Audio Looper System – Live System Test
 =============================================================================
 
-Spustenie (z project rootu alebo z test/ priečinka):
-    python3 test/test_live_system.py
+Spustenie (z project rootu alebo z tests/ priečinka):
+    python3 tests/test_live_system.py
 
 Požiadavky:
     - Systém beží ako systemd service: audio_looper.service
@@ -51,7 +51,7 @@ import threading
 
 # ── Konfigurácia ──────────────────────────────────────────────────────────────
 
-# Súbor je v test/ priečinku → project root je o úroveň vyššie
+# Súbor je v tests/ priečinku → project root je o úroveň vyššie
 PROJECT_ROOT     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SERVICE_NAME     = "audio_looper.service"

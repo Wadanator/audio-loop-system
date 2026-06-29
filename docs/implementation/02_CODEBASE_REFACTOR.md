@@ -21,11 +21,10 @@ and runtime safety separately.
   - `src/audio_loop/web/stats_server.py`
   - `src/audio_loop/infra/logging_setup.py`
   - `src/audio_loop/infra/paths.py`
-- Root files such as `main.py`, `audio_manager.py`, `looper_engine.py`,
-  `modbus_bus.py`, `stats_server.py`, and `logging_setup.py` are now thin
-  compatibility wrappers during the transition.
-- `button_handler.py` remains only as historical GPIO reference and is still
-  outside the production startup path.
+- `[implemented] 2026-06-29 10:28:27 +02:00` - Clean development policy applied:
+  old root compatibility wrappers were removed, and the historical GPIO
+  `button_handler.py` file was deleted. Root `main.py` remains only as the
+  intentional project launcher for `audio_loop.app.main`.
 - `config.json` still stays in the project root for this phase.
 
 ## Target structure
@@ -83,9 +82,12 @@ tests/
 ## Refactor rules
 
 - Do not change playback behavior during the first move.
-- Keep `python main.py` working as a compatibility entry point.
+- Keep `python main.py` working as the clean project launcher, not as an old
+  compatibility layer.
 - Add minimal smoke tests before moving code.
 - Move code, update imports, then run smoke tests after each small move.
+- Because the system is still in development, prefer clean removal of obsolete
+  files over long-lived backwards-compatibility wrappers.
 - Avoid mixing hardware migration and file movement in one commit if possible.
 - Keep audio logic independent from web and hardware implementation details.
 
@@ -98,9 +100,8 @@ tests/
 - `[implemented] 2026-06-28 22:34:29 +02:00` - Created the `src/audio_loop/`
   package skeleton and moved app, audio, core, hardware, input, output, stats,
   web, and infra modules into focused subpackages.
-- `[implemented] 2026-06-28 22:34:29 +02:00` - Root `main.py` is now a thin
-  compatibility launcher that imports `audio_loop.app.main`; old root module
-  names remain as wrappers for transitional compatibility.
+- `[implemented] 2026-06-28 22:34:29 +02:00` - Root `main.py` was made a thin
+  launcher that imports `audio_loop.app.main`.
 - `[implemented] 2026-06-28 22:34:29 +02:00` - Added
   `src/audio_loop/infra/paths.py` and fixed `logging_setup.py` so logs still go
   to project-root `logs/`, not inside `src/audio_loop/infra/`.
@@ -108,9 +109,24 @@ tests/
   dependencies to use `TYPE_CHECKING`, so importing `audio_loop.core` no longer
   requires audio runtime packages like `sounddevice`.
 - `[verified] 2026-06-28 22:34:29 +02:00` - `py_compile` passed for root
-  wrappers and refactored package modules; `tests/smoke_refactor.py` passed;
-  package imports and compatibility imports passed; the user's Python 3.13
-  imported root `main.py` and resolved `main.main.__module__ == "audio_loop.app"`.
+  launcher and refactored package modules; `tests/smoke_refactor.py` passed;
+  package imports passed; the user's Python 3.13 imported root `main.py` and
+  resolved `main.main.__module__ == "audio_loop.app"`.
+- `[implemented] 2026-06-29 10:28:27 +02:00` - Removed obsolete root
+  compatibility wrapper files: `audio_manager.py`, `logging_setup.py`,
+  `looper_engine.py`, `modbus_bus.py`, `modbus_button_handler.py`,
+  `modbus_led_controller.py`, `stats_collector.py`, and `stats_server.py`.
+  Deleted old GPIO `button_handler.py`. Updated smoke test so it requires
+  clean `audio_loop.*` package imports and verifies these legacy files are not
+  present.
+- `[implemented] 2026-06-29 10:37:00 +02:00` - Moved bench/live scripts
+  from `test/` to `tests/`, removed the obsolete GPIO-only `btntest.py`,
+  removed the empty `test/` directory, updated script/docs commands to use
+  `tests/...` paths, and refreshed `README.md` to describe the current Modbus
+  package layout.
+- `[verified] 2026-06-29 10:37:00 +02:00` - `py_compile` passed for all
+  `tests/*.py`; `tests/smoke_refactor.py` passed; the user Python 3.13 showed
+  help for `tests/di_monitor.py` and `tests/do_chaser.py` from their new paths.
 - `[pending]` - Run the real hardware app once after the refactor to confirm
   Box 1 DI/DO behavior is unchanged.
 - `[pending]` - Move config loading/validation into `src/audio_loop/config.py`
@@ -163,8 +179,8 @@ tests/
 
 7. Move input code - `[partially implemented] 2026-06-28 22:34:29 +02:00`
    - Move the new Modbus input code into `src/audio_loop/input/modbus_panel.py`.
-   - Leave old `button_handler.py` out of the app startup path and delete it in
-     a later cleanup once Modbus input is fully proven.
+   - Old `button_handler.py` has been deleted; do not keep a GPIO compatibility
+     path during development.
    - Add `src/audio_loop/input/base.py`.
    - Add provider factory:
      - `create_input_handler(config, callback)`.
@@ -173,7 +189,7 @@ tests/
    - Move `stats_server.py` into `src/audio_loop/web/`.
    - Later replace it with the fuller dashboard API from Goal 3.
 
-9. Create new app orchestration - `[implemented] 2026-06-28 22:34:29 +02:00`
+9. Create new app orchestration - `[implemented clean] 2026-06-29 10:28:27 +02:00`
    - Move `AudioLooper` class from root `main.py` to `src/audio_loop/app.py`.
    - Root `main.py` becomes a thin wrapper:
 
@@ -194,10 +210,10 @@ if __name__ == "__main__":
    - Keep `config.json` readable from the current working directory during the
      transition.
 
-11. Update tests and scripts - `[partially implemented] 2026-06-28 22:34:29 +02:00`
-    - Update imports in `test/`.
-    - Rename `test/` to `tests/` if desired.
-    - Add a smoke test that imports the app package without requiring RPi GPIO.
+11. Update tests and scripts - `[implemented] 2026-06-29 10:37:00 +02:00`
+    - Test and bench scripts now live in `tests/`.
+    - The obsolete GPIO-only `btntest.py` was deleted.
+    - `tests/smoke_refactor.py` imports the app package without requiring RPi GPIO.
 
 ## Acceptance criteria
 
