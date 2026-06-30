@@ -307,9 +307,11 @@ def test_modbus_button_status_reports_debounced_input_state():
 
 def test_dashboard_layers_payload_uses_live_input_and_led_state():
     server_module = importlib.import_module("audio_loop.web.server")
-    handler_class = server_module.DashboardRequestHandler
 
     class FakeEngine:
+        def __init__(self):
+            self.pressed = []
+
         def get_system_status(self):
             return {
                 "system_active": True,
@@ -321,6 +323,9 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
                 "total_sessions": 1,
                 "song_rotation_enabled": True,
             }
+
+        def handle_button_press(self, instrument):
+            self.pressed.append(instrument)
 
     class FakeStats:
         def get_stats(self):
@@ -349,19 +354,24 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
                 "last_error_at": 0,
             }
 
-    previous_context = handler_class.context
-    handler_class.context = {
-        "looper_engine": FakeEngine(),
+    class FakeBus:
+        def get_status(self):
+            return {
+                "box_1": {"connected": True},
+                "box_2": {"connected": False},
+            }
+
+    engine = FakeEngine()
+    context = {
+        "looper_engine": engine,
         "stats_collector": FakeStats(),
         "input_handler": FakeInput(),
         "led_controller": FakeLed(),
+        "modbus_bus": FakeBus(),
         "config": {"performance": {"max_concurrent_sounds": 3}},
     }
-    try:
-        handler = object.__new__(handler_class)
-        payload = handler._layers_payload()
-    finally:
-        handler_class.context = previous_context
+    service = server_module.DashboardService(context)
+    payload = service.layers_payload()
 
     layer_1, layer_2, layer_3 = payload["layers"]
     assert layer_1["input_connected"] is True
@@ -373,6 +383,31 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
     assert layer_2["led_state"] is False
     assert layer_3["input_connected"] is False
     assert layer_3["physical_input"] is None
+
+    app = server_module.create_dashboard_app(
+        looper_engine=engine,
+        stats_collector=context["stats_collector"],
+        input_handler=context["input_handler"],
+        led_controller=context["led_controller"],
+        modbus_bus=context["modbus_bus"],
+        config=context["config"],
+    )
+    client = app.test_client()
+
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.get_json()["web_backend"] == "flask"
+
+    status = client.get("/api/status")
+    assert status.status_code == 200
+    status_payload = status.get_json()
+    assert status_payload["modbus_degraded"] is True
+    assert status_payload["modbus_disconnected_modules"] == ["box_2"]
+
+    response = client.post("/api/layers/2/press")
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+    assert engine.pressed == [2]
 
 if __name__ == "__main__":
     test_import_main_does_not_import_gpio_or_legacy_wrappers()

@@ -51,7 +51,7 @@ Keeps activation counters in memory and saves them periodically.
 
 ### `src/audio_loop/web/server.py`
 
-Current lightweight stats HTTP server. The future simplified room dashboard is planned as Goal 3.
+Flask dashboard/API server. It serves `/health`, `/api/status`, `/api/layers`, `/api/stats`, remote layer press routes, and the built React app from `src/audio_loop/web/static/`. It is optional: if web startup fails, audio and physical Modbus buttons continue.
 
 ## Config Shape
 
@@ -59,7 +59,7 @@ Current lightweight stats HTTP server. The future simplified room dashboard is p
 {
   "inputs": {
     "provider": "modbus_panel",
-    "button_cooldown_seconds": 1.5
+    "min_on_seconds": 1.5,`n    "rearm_seconds": 0.2
   },
   "outputs": {
     "provider": "modbus_panel",
@@ -85,5 +85,5 @@ Current lightweight stats HTTP server. The future simplified room dashboard is p
 
 - Web down: audio and physical buttons continue.
 - LED write fails: audio and input continue.
-- One future box offline: the other box should continue after production bus isolation is completed.
+- One Modbus box offline: the other box should continue through its independent TCP connection.
 - Missing WAV for a pressed instrument: log warning, do not activate that layer.

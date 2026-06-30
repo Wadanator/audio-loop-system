@@ -41,6 +41,10 @@ class DashboardService:
         connected_modules = sum(
             1 for module in modbus_status.values() if module.get("connected")
         )
+        disconnected_modules = sorted(
+            name for name, module in modbus_status.items()
+            if not module.get("connected")
+        )
 
         return {
             "ok": True,
@@ -56,8 +60,10 @@ class DashboardService:
             "input_provider": config.get("inputs", {}).get("provider"),
             "output_provider": config.get("outputs", {}).get("provider"),
             "modbus_connected": module_count > 0 and connected_modules == module_count,
+            "modbus_degraded": module_count > 0 and bool(disconnected_modules),
             "modbus_connected_modules": connected_modules,
             "modbus_module_count": module_count,
+            "modbus_disconnected_modules": disconnected_modules,
             "modbus": modbus_status,
             "leds": self.led_status(),
             "updated_at": time.time(),

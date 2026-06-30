@@ -11,7 +11,7 @@ The current production/development input path is Modbus TCP, not Raspberry Pi GP
 - Box 1 DI1-DI8 are read from `192.168.0.200:4196`, Modbus unit `1`; Box 2 DI1-DI8 map to instruments 9-16.
 - DO outputs mirror active audio layers best-effort; LED failures must not stop audio.
 - Root `main.py` is only the launcher. Runtime code lives under `src/audio_loop/`.
-- Dashboard source is a modular React/Vite app in `dashboard/`; the operator UI is Slovak and intentionally minimal (`Prehlad` + `Zvuky`).
+- Dashboard source is a modular React/Vite app in `dashboard/`; Flask serves the API and production static build from the Python backend. The operator UI is Slovak and intentionally compact (`Prehľad` + `Zvuky` + `Systém`).
 
 ## Structure
 
@@ -73,7 +73,7 @@ cd dashboard
 npm run dev
 ```
 
-The backend serves production dashboard files from `src/audio_loop/web/static/`. The UI shows the current song, simple runtime status, active sounds, activation counts, and remote press controls for up to 16 sounds.
+The Flask backend serves production dashboard files from `src/audio_loop/web/static/`. The UI shows the current song, simple runtime status, active sounds, activation counts, and remote press controls for up to 16 sounds.
 
 ## Bench Scripts
 
@@ -107,6 +107,7 @@ pip install -r requirements.txt
 
 Current hardware/software dependency highlights:
 
+- `flask` / `werkzeug` for the same-origin dashboard API and static React build serving.
 - `pymodbus` for Modbus TCP DI/DO.
 - `sounddevice`, `soundfile`, `numpy` for audio playback.
 - `react`, `vite`, and `lucide-react` for the dashboard.

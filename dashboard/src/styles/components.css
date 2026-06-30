@@ -121,6 +121,32 @@
   color: var(--danger);
 }
 
+.main-status.warning {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18);
+}
+
+.status-module-warning {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  max-width: 760px;
+  margin: var(--spacing-lg) auto 0;
+  padding: var(--spacing-sm-plus) var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--warning) 36%, transparent);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  line-height: var(--line-height-snug);
+}
+
+.status-module-warning svg {
+  flex: 0 0 auto;
+}
+
 .status-icon {
   margin-bottom: 10px;
   display: flex;

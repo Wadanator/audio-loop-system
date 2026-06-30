@@ -65,6 +65,7 @@ Views:
    - active sound count and a short list of what is running
    - time until global timeout
    - Modbus panel state in short form
+   - overview shows a compact warning when one or both configured Modbus boxes are disconnected
    - web/backend connection state
 
 2. Sounds / Zvuky
@@ -85,7 +86,7 @@ information stays in logs, health/status API responses, and developer tooling.
 
 ## Backend API
 
-Replace the old stats-only server with small JSON routes and a static React build server.
+Replace the old stats-only server with small Flask JSON routes and a static React build server.
 
 Minimum routes:
 
@@ -190,6 +191,7 @@ Expected result:
      no longer enough.
    - SSE is enough for dashboard feedback and avoids WebSocket complexity.
    - Keep polling as fallback when the SSE stream disconnects.
+   - Socket.IO is not currently part of the dashboard dependency set; add it only if real push updates become worth the extra dependency.
 
 7. Build static assets - `[verified] 2026-06-29 15:29:30 +02:00`
    - Vite build outputs into Python web static directory:
@@ -348,6 +350,45 @@ Expected result:
   the rebuilt files under `src/audio_loop/web/static/`.
   Verification: `npm run build` passed and a UTF-8 source check found no
   mojibake in the changed React/CSS files.
+- `[implemented, verified] 2026-06-30 17:22:37 +02:00` - Web backend migrated from the built-in `http.server` handler to Flask.
+  `src/audio_loop/web/server.py` now exposes `create_dashboard_app(...)`, a
+  `DashboardService` payload layer, Flask API routes for `/health`,
+  `/api/status`, `/api/layers`, `/api/stats`, and the same remote layer press
+  route. The Flask app also serves the React production build and SPA fallbacks
+  from `src/audio_loop/web/static/`. `run_dashboard_server(...)` still runs the
+  web stack as an optional background server with bind retries, so physical
+  Modbus buttons and audio are not dependent on the dashboard.
+  Changed files: `src/audio_loop/web/server.py`, `requirements.txt`,
+  `tests/smoke_refactor.py`, `tests/test_live_system.py`, `README.md`,
+  `docs/03_how_it_works.md`, and the implementation docs.
+  Verification: Flask is available in the local Python environment, Python
+  `py_compile` passed, `tests/smoke_refactor.py` passed, `npm run build` passed,
+  and Flask `test_client` returned HTTP 200 for `/health`, `/api/status`,
+  `/api/layers`, `/`, `/system`, and the built JS asset. `/health` reports
+  `web_backend: flask`.
+
+- `[implemented, verified] 2026-06-30 17:27:16 +02:00` - Final small branding alignment.
+  The Vite HTML title now uses `Museum Control System` instead of `Audio Loop
+  Dashboard`, matching the shared museum dashboard brand. `npm run build`
+  regenerated the Flask-served static `index.html`, and Flask `test_client`
+  route checks still returned HTTP 200.
+- `[implemented, verified] 2026-06-30 17:37:20 +02:00` - Overview Modbus degraded warning added.
+  `/api/status` now reports `modbus_degraded` and
+  `modbus_disconnected_modules`, derived from the shared Modbus bus status.
+  The `Prehľad` hero shows a Slovak warning if one configured box is offline
+  and a stronger warning if both configured boxes are offline, while remote web
+  control and any still-connected module continue to work. Socket.IO was not
+  added in this pass because neither `flask_socketio` nor `socket.io-client` is
+  installed in this project, and the existing one-second polling remains the
+  simpler safe fallback for the current operator dashboard.
+  Changed files: `src/audio_loop/web/server.py`,
+  `dashboard/src/components/Overview/OverviewHero.jsx`,
+  `dashboard/src/styles/components.css`, `tests/smoke_refactor.py`, and the
+  rebuilt files under `src/audio_loop/web/static/`.
+  Verification: Python `py_compile` passed, `tests/smoke_refactor.py` passed,
+  `npm run build` passed, and UTF-8 source checks confirmed the Slovak warning
+  copy is not mojibake.
+
 ## Acceptance criteria
 
 - Dashboard loads from the Raspberry Pi web server on the same host as the API.
@@ -356,6 +397,7 @@ Expected result:
 - Clicking sound 1 remote press behaves like physical button 1.
 - Physical DIN button press updates dashboard state.
 - Web failure does not stop audio or physical controls.
+- Overview shows a clear Modbus warning when one or both configured boxes are disconnected, without blocking other working controls.
 - The visual style clearly matches `museum-system`, but the feature surface is
   much smaller.
 - The operator UI is Slovak and does not expose technical diagnostics as a

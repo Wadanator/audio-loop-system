@@ -6,17 +6,19 @@ is the current programming backlog.
 
 ## Current known-good state
 
-Status timestamp: `[documented] 2026-06-30 17:12:15 +02:00`
+Status timestamp: `[documented] 2026-06-30 17:37:20 +02:00`
 
 - Box 1 works with the real IO module at `192.168.0.200:4196`.
 - Box 2 is configured at `192.168.0.201:4196` for instruments 9-16; hardware bench/full app verification is still pending.
 - DI input and DO/LED output are implemented through Modbus, not Raspberry Pi GPIO.
 - The app can run on Windows and Raspberry Pi as long as config/audio/device dependencies are available.
 - The React dashboard exists, builds into `src/audio_loop/web/static/`, and shows the current room state.
+- The web backend now runs on Flask and serves the same-origin API plus the built React app.
 - The dashboard has a frontend login using `admin` / `admin12321`.
 - The dashboard shell now uses the museum-system-style MUSEUM sidebar, admin footer, icon-only logout, and theme toggle.
 - Remote sound press uses the same backend path as a physical button press.
 - Each sound card now has a small Modbus connection dot: green means mapped module is communicating; red means module offline/not communicating or mapping missing.
+- The Overview page warns when one or both configured Modbus modules are disconnected, but does not block audio, web remote press, or the still-connected module.
 - Current practical audio target is max 16 sounds and up to about 3 minutes per song.
 
 ## Programming work still worth doing
@@ -52,7 +54,8 @@ Status timestamp: `[documented] 2026-06-30 17:12:15 +02:00`
    - `config.json` parses and `tests/smoke_refactor.py` passed.
    - Still run DI/DO bench tests and full app tests with both boxes.
 
-6. Runtime safety hardening - `[pending]`
+6. Runtime safety hardening - `[partially implemented] 2026-06-30 17:37:20 +02:00`
+   - Overview degraded Modbus warning is implemented for one/both disconnected configured boxes.
    - Test what happens when the Modbus box disconnects while audio is playing.
    - Ensure web/dashboard failure does not stop physical buttons or audio.
    - Ensure shutdown flushes stats and turns LEDs off best-effort.
@@ -65,7 +68,7 @@ Status timestamp: `[documented] 2026-06-30 17:12:15 +02:00`
 
 ## Not urgent right now
 
-- Server-Sent Events or WebSockets. One-second polling is acceptable for now.
+- Server-Sent Events, WebSockets, or Socket.IO. One-second polling is acceptable for now and remains the safer fallback without extra dependencies.
 - More UI pages for normal operators.
 - Major architecture refactors. The code is already modular enough for the current phase.
 

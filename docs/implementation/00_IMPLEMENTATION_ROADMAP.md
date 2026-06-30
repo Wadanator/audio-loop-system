@@ -194,6 +194,22 @@ Implementation log:
   icon-only theme/logout actions, dark theme token support, and a system page
   layout/toast pattern closer to the original dashboard. `npm run build` passed
   and UTF-8 source checks passed for the changed React/CSS files.
+- `[implemented, verified] 2026-06-30 17:22:37 +02:00` - Dashboard backend migrated to Flask.
+  `src/audio_loop/web/server.py` now uses Flask routes and a `DashboardService`
+  payload layer while preserving the same API contract and optional background
+  server behavior. `requirements.txt` now includes `flask` and `werkzeug`.
+  `py_compile`, `tests/smoke_refactor.py`, `npm run build`, and Flask
+  `test_client` route checks passed.
+
+- `[implemented, verified] 2026-06-30 17:37:20 +02:00` - Overview Modbus degraded warning added.
+  `/api/status` now exposes `modbus_degraded` and
+  `modbus_disconnected_modules`, and the React `Prehľad` hero warns when one
+  or both configured Modbus boxes are disconnected. Existing one-second polling
+  stays in place; Socket.IO was intentionally not added because the project does
+  not currently depend on it and polling is sufficient for this dashboard.
+  `py_compile`, `tests/smoke_refactor.py`, UTF-8 checks, and `npm run build`
+  passed.
+
 ## Implementation order
 
 0. `00A_MODBUS_BRINGUP.md`

@@ -9,7 +9,7 @@ Spustenie (z project rootu alebo z tests/ priečinka):
 
 Požiadavky:
     - Systém beží ako systemd service: audio_looper.service
-    - Stats server dostupný na http://localhost:8000
+    - Flask dashboard server dostupný na http://localhost:8000
     - Tento skript sa spúšťa na tom istom RPi kde beží service
     - Spúšťa sa ako rovnaký user (nie root)
 
@@ -19,11 +19,11 @@ Požiadavky:
     3.  Service nepadá (restart counter)
     4.  Systemd watchdog je nakonfigurovaný
     5.  User linger je zapnutý
-    6.  Stats server odpovedá na HTTP
+    6.  Flask dashboard server odpovedá na HTTP
     7.  Stats HTML dashboard je dostupný
     8.  Stats JSON má správnu štruktúru
     9.  Stats JSON hodnoty sú validné
-    10. Stats server zvládne súčasné požiadavky (GIL test)
+    10. Flask dashboard server zvládne súčasné požiadavky
     11. critical_errors.log neobsahuje ERROR záznamy
     12. Journald neobsahuje ERROR záznamy za posl. 60 min
     13. Log súbor nie je príliš veľký
@@ -191,17 +191,17 @@ def test_linger_enabled():
 
 
 def test_stats_server_responds():
-    """Stats server musí odpovedať na HTTP GET /stats do 5 sekúnd."""
+    """Flask dashboard server musí odpovedať na HTTP GET /api/stats do 5 sekúnd."""
     try:
         with urllib.request.urlopen(STATS_URL, timeout=HTTP_TIMEOUT_S) as resp:
             if resp.status == 200:
-                record(PASS, f"Stats server odpovedá (HTTP {resp.status})")
+                record(PASS, f"Flask dashboard server odpovedá (HTTP {resp.status})")
             else:
-                record(FAIL, f"Stats server vrátil HTTP {resp.status}")
+                record(FAIL, f"Flask dashboard server vrátil HTTP {resp.status}")
     except urllib.error.URLError as e:
-        record(FAIL, "Stats server neodpovedá", str(e))
+        record(FAIL, "Flask dashboard server neodpovedá", str(e))
     except Exception as e:
-        record(FAIL, "Stats server – neočakávaná chyba", str(e))
+        record(FAIL, "Flask dashboard server – neočakávaná chyba", str(e))
 
 
 def test_stats_server_html():
@@ -263,7 +263,7 @@ def test_stats_json_values_sane():
 
 
 def test_stats_server_concurrent():
-    """Stats server musí zvládnuť 5 súčasných požiadaviek (GIL / ThreadingHTTPServer test)."""
+    """Flask dashboard server musí zvládnuť 5 súčasných požiadaviek."""
     errors = []
 
     def fetch():
@@ -280,10 +280,10 @@ def test_stats_server_concurrent():
         t.join(timeout=HTTP_TIMEOUT_S + 2)
 
     if not errors:
-        record(PASS, "Stats server zvládol 5 súčasných požiadaviek")
+        record(PASS, "Flask dashboard server zvládol 5 súčasných požiadaviek")
     else:
         record(FAIL,
-               f"Stats server zlyhal pri súčasných požiadavkách ({len(errors)}/5)",
+               f"Flask dashboard server zlyhal pri súčasných požiadavkách ({len(errors)}/5)",
                errors[0])
 
 
@@ -581,9 +581,9 @@ def test_service_restart_recovery():
             time.sleep(2)
             try:
                 with urllib.request.urlopen(STATS_URL, timeout=HTTP_TIMEOUT_S):
-                    record(PASS, "Stats server odpovedá po reštarte")
+                    record(PASS, "Flask dashboard server odpovedá po reštarte")
             except Exception as e:
-                record(FAIL, "Stats server neodpovedá po reštarte", str(e))
+                record(FAIL, "Flask dashboard server neodpovedá po reštarte", str(e))
             return
 
     record(FAIL, "Service sa nezotavila do 15 sekúnd po reštarte",
