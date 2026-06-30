@@ -7,14 +7,22 @@ import SystemView from './components/System/SystemView.jsx';
 import LoginView from './components/Auth/LoginView.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { useDashboardData } from './hooks/useDashboardData.js';
+import useTheme from './hooks/useTheme.js';
 
 function DashboardShell() {
   const [activeView, setActiveView] = useState('overview');
   const dashboard = useDashboardData();
   const { logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   return (
-    <AppLayout activeView={activeView} onViewChange={setActiveView} offline={dashboard.offline} onLogout={logout}>
+    <AppLayout
+      activeView={activeView}
+      onViewChange={setActiveView}
+      onLogout={logout}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    >
       <RuntimeStatusBar status={dashboard.status} offline={dashboard.offline} lastUpdated={dashboard.lastUpdated} />
       {activeView === 'overview' && (
         <OverviewView

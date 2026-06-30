@@ -30,6 +30,21 @@
           {"channel": 7, "instrument": 7},
           {"channel": 8, "instrument": 8}
         ]
+      },
+      {
+        "name": "box_2",
+        "host": "192.168.0.201",
+        "unit_id": 1,
+        "channels": [
+          {"channel": 1, "instrument": 9},
+          {"channel": 2, "instrument": 10},
+          {"channel": 3, "instrument": 11},
+          {"channel": 4, "instrument": 12},
+          {"channel": 5, "instrument": 13},
+          {"channel": 6, "instrument": 14},
+          {"channel": 7, "instrument": 15},
+          {"channel": 8, "instrument": 16}
+        ]
       }
     ]
   },

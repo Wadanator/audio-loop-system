@@ -315,7 +315,7 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
                 "system_active": True,
                 "current_song": {"name": "song1"},
                 "active_instruments": [1],
-                "available_instruments": [1, 2],
+                "available_instruments": [1, 2, 3],
                 "session_duration": 0,
                 "time_until_timeout": 60,
                 "total_sessions": 1,
@@ -324,7 +324,7 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
 
     class FakeStats:
         def get_stats(self):
-            return {"instrument_1": 7, "instrument_2": 0}
+            return {"instrument_1": 7, "instrument_2": 0, "instrument_3": 0}
 
     class FakeInput:
         def get_button_status(self):
@@ -336,6 +336,7 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
                         2: {"stable": False, "raw": False, "changed_at": 124.0},
                     }
                 },
+                "bus": {"box_1": {"connected": True}},
             }
 
     class FakeLed:
@@ -354,7 +355,7 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
         "stats_collector": FakeStats(),
         "input_handler": FakeInput(),
         "led_controller": FakeLed(),
-        "config": {"performance": {"max_concurrent_sounds": 2}},
+        "config": {"performance": {"max_concurrent_sounds": 3}},
     }
     try:
         handler = object.__new__(handler_class)
@@ -362,13 +363,16 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
     finally:
         handler_class.context = previous_context
 
-    layer_1, layer_2 = payload["layers"]
+    layer_1, layer_2, layer_3 = payload["layers"]
+    assert layer_1["input_connected"] is True
     assert layer_1["input_state"] is True
     assert layer_1["led_state"] is True
     assert layer_1["stats_count"] == 7
+    assert layer_2["input_connected"] is True
     assert layer_2["input_state"] is False
     assert layer_2["led_state"] is False
-
+    assert layer_3["input_connected"] is False
+    assert layer_3["physical_input"] is None
 
 if __name__ == "__main__":
     test_import_main_does_not_import_gpio_or_legacy_wrappers()

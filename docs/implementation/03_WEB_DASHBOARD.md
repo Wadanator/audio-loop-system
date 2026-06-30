@@ -25,7 +25,7 @@ Use this project as the concrete design reference:
 
 `C:/Users/Wajdy/Documents/Kodovanie/museum-system/museum-dashboard`
 
-Copy the visual language and useful primitives from there, but keep this room dashboard much smaller.
+Copy the visual language and useful primitives from there, but keep this room dashboard much smaller. The app shell should feel like it was assembled from the same component template as museum-system; room-specific differences should be limited to the audio views and audio actions.
 
 ## What to copy from museum-system
 
@@ -73,6 +73,8 @@ Views:
      - number/name
      - status: hrá, čaká, or chýba
      - activation count
+     - small connection dot: green means the module for this sound communicates and the channel is mapped; red means module offline, not communicating, or mapping missing
+     - no tooltip for the connection dot
      - one remote press button
      - green active card when the sound is playing
      - no separate INPUT/LED boxes for normal operators
@@ -314,6 +316,38 @@ Expected result:
   `npm run build` regenerated `assets/index-D7cLrbf-.js` and
   `assets/index-r7ljb3CZ.css`, and source scan found no old INPUT/LED layer-card
   UI tokens in `dashboard/src`.
+- `[implemented, verified] 2026-06-30 16:59:22 +02:00` - Per-sound Modbus connection dot and `Zvuky` header alignment completed.
+  `/api/layers` now exposes `input_connected`, which is true only when a
+  physical input mapping exists for the sound and the owning Modbus module
+  currently reports `connected`. Missing mapping, offline module, or failed
+  communication returns false for the dashboard. Layer cards show only a small
+  green/red dot next to the status badge, with no visible tooltip, and the
+  `Zvuky` page now uses the shared `PageHeader` style like the `System` page.
+  Changed files: `src/audio_loop/web/server.py`, `tests/smoke_refactor.py`,
+  `dashboard/src/components/Layers/LayersView.jsx`,
+  `dashboard/src/components/Layers/LayerCard.jsx`, `dashboard/src/styles/components.css`,
+  and the rebuilt files under `src/audio_loop/web/static/`.
+  Verification: Python `py_compile` passed for the changed backend/test files,
+  `tests/smoke_refactor.py` passed, `npm run build` passed, and a UTF-8 source
+  check confirmed the Slovak dashboard copy is not mojibake.
+
+- `[implemented, verified] 2026-06-30 17:12:15 +02:00` - Shared museum-style app shell pass completed.
+  The audio dashboard now uses the same `museum-system` sidebar pattern: MUSEUM
+  brand block, compact audio-specific navigation, admin footer with avatar,
+  `Správca` label, theme toggle icon button, and icon-only logout button. Added
+  a small `useTheme` hook with `data-theme`/localStorage support and dark theme
+  tokens copied from the reference style approach. The `Systém` view now matches
+  the reference card layout more closely: no persistent bottom note, prepared
+  actions show a floating toast-style message, and secondary/danger buttons use
+  the shared gradient control style.
+  Changed files: `dashboard/src/App.jsx`, `dashboard/src/hooks/useTheme.js`,
+  `dashboard/src/components/Layout/AppLayout.jsx`,
+  `dashboard/src/components/Layout/Sidebar.jsx`,
+  `dashboard/src/components/System/SystemView.jsx`, `dashboard/src/styles/theme.css`,
+  `dashboard/src/styles/layout.css`, `dashboard/src/styles/components.css`, and
+  the rebuilt files under `src/audio_loop/web/static/`.
+  Verification: `npm run build` passed and a UTF-8 source check found no
+  mojibake in the changed React/CSS files.
 ## Acceptance criteria
 
 - Dashboard loads from the Raspberry Pi web server on the same host as the API.

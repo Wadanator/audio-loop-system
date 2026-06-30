@@ -59,8 +59,7 @@ Default mapping:
   removed from the production startup path and the running app reacts to real
   Modbus DI presses from the configured `box_1`. A deliberate DI1-DI8 pass was
   completed in the running app.
-- Phase B: `[pending]` - add `box_2` to config for inputs 9-16 once the second
-  module is wired and passes the same monitor/smoke tests.
+- Phase B: `[implemented in config; hardware verification pending] 2026-06-30 16:37:02 +02:00` - `box_2` is now configured at `192.168.0.201:4196`, unit `0x01`, with DI/DO channels 1-8 mapped to instruments 9-16. Bench DI/DO and full app verification with the real second module are still pending.
 - Phase C: `[verified on Box 1 DI1-DI8] 2026-06-28 22:23:20 +02:00` - LED
   feedback code is wired through the shared Modbus bus and `LooperEngine`.
   Real DI1-DI4 activations light the expected active-layer LEDs; DI5-DI8 are
@@ -119,7 +118,12 @@ Default mapping:
   incremented on activations. DI5-DI8 reached `LooperEngine` but logged
   "instrument not available" because `song1` has no WAV files for those
   instruments; this is expected and did not crash the app.
-- `[pending]` - Later, when WAV files exist for instruments 5-8, repeat the
+- `[implemented, config verified; hardware verification pending] 2026-06-30 16:37:02 +02:00` - Added Box 2 to `config.json`.
+  `box_2` uses host `192.168.0.201`, port `4196`, unit `1`, and maps module
+  channels 1-8 to instruments 9-16. This enables the second 8-input/8-output
+  panel path in the app configuration. Config verification passed: `config.json` parses with two modules, Box 2 maps to instruments 9-16, and `tests/smoke_refactor.py` passed. Hardware verification still pending: run
+  `tests/di_monitor.py` and `tests/do_chaser.py` against `.201`, then run the
+  full app and press Box 2 DI1-DI8.- `[pending]` - Later, when WAV files exist for instruments 5-8, repeat the
   full Box 1 pass to confirm DO5-DO8 light for real active layers too.
 
 ## New config shape

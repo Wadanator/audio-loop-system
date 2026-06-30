@@ -1,15 +1,21 @@
-import { useState } from 'react';
-import { HardDrive, Power, RefreshCw, Server, Settings } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { HardDrive, Power, RefreshCw, Server, Settings, XCircle } from 'lucide-react';
 import Button from '../ui/Button.jsx';
 import ButtonGroup from '../ui/ButtonGroup.jsx';
 import Card from '../ui/Card.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
 
 export default function SystemView() {
-  const [message, setMessage] = useState('Akcie sú pripravené v UI. Backend endpointy ešte nie sú napojené.');
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (!message) return undefined;
+    const timeout = window.setTimeout(() => setMessage(''), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [message]);
 
   const handlePreparedAction = (label) => {
-    setMessage(`${label}: UI pripravené, backend endpoint ešte nie je napojený.`);
+    setMessage(`${label}: backend endpoint ešte nie je napojený`);
   };
 
   return (
@@ -19,6 +25,13 @@ export default function SystemView() {
         subtitle="Správa servera a hardvéru"
         icon={Settings}
       />
+
+      {message && (
+        <div className="system-toast" role="status" aria-live="polite">
+          <XCircle size={20} />
+          <span>{message}</span>
+        </div>
+      )}
 
       <div className="system-grid">
         <Card title="Aplikácia Múzeum" icon={Server} className="system-card">
@@ -64,10 +77,6 @@ export default function SystemView() {
             </ButtonGroup>
           </div>
         </Card>
-      </div>
-
-      <div className="system-note" role="status" aria-live="polite">
-        {message}
       </div>
     </section>
   );

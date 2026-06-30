@@ -7,6 +7,7 @@ export default function LayerCard({ layer, pending, onPress }) {
   const label = layer.label || defaultLabel;
   const hasCustomLabel = label !== defaultLabel;
   const disabled = pending || !layer.available;
+  const inputConnected = Boolean(layer.input_connected);
   const buttonText = pending
     ? 'Pracujem'
     : layer.active
@@ -20,9 +21,12 @@ export default function LayerCard({ layer, pending, onPress }) {
           {hasCustomLabel && <span className="layer-number">{defaultLabel}</span>}
           <h3>{label}</h3>
         </div>
-        <StatusBadge tone={layer.active ? 'success' : layer.available ? 'neutral' : 'warning'}>
-          {layer.active ? 'Hrá' : layer.available ? 'Čaká' : 'Chýba'}
-        </StatusBadge>
+        <div className="layer-status-stack" aria-label={inputConnected ? 'Tlačidlový modul pripojený' : 'Tlačidlový modul nepripojený'}>
+          <span className={`layer-connection-dot ${inputConnected ? 'is-connected' : 'is-disconnected'}`} />
+          <StatusBadge tone={layer.active ? 'success' : layer.available ? 'neutral' : 'warning'}>
+            {layer.active ? 'Hrá' : layer.available ? 'Čaká' : 'Chýba'}
+          </StatusBadge>
+        </div>
       </div>
 
       <div className="layer-count">

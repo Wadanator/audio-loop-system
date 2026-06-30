@@ -156,7 +156,8 @@ Implementation log:
   style login panel (`admin` / `admin12321`), sends `auth_header` on API calls,
   includes a UI-only `Systém` tab for future backend/RPi restart actions, and
   removes the separate INPUT/LED boxes from sound cards. `py_compile`,
-  `tests/smoke_refactor.py`, and `npm run build` passed.- `[pending]` - Run the real Box 1 app after the refactor/config cleanup to
+  `tests/smoke_refactor.py`, and `npm run build` passed.
+- `[pending]` - Run the real Box 1 app after the refactor/config cleanup to
   confirm DI/DO behavior is unchanged, then continue with Goal 3 dashboard
   verification or the remaining runtime safety improvements.
 - `[reviewed] 2026-06-29 15:34:54 +02:00` - Button feel rework plan corrected
@@ -171,6 +172,28 @@ Implementation log:
   config. Real Box 1 bench verification is still pending.
 - `[implemented, verified] 2026-06-29 15:54:15 +02:00` - Clean-development pass after button rework: runtime docstrings/plans now reflect the 16-sound room target, and `StatsCollector` ignores unknown historical layer keys such as `instrument_17` when loading an old `stats.json`. `py_compile` and `tests/smoke_refactor.py` passed again.
 
+- `[documented] 2026-06-29 23:40:09 +02:00` - Added `06_FINAL_PROGRAMMING_TODO.md`
+  as the short new-chat handoff checklist for the remaining programming work:
+  backend auth, system command endpoints, audio loader RAM optimization, RPi
+  deployment files, Box 2 config later, runtime safety tests, and documentation
+  cleanup.
+- `[implemented, config verified; hardware verification pending] 2026-06-30 16:37:02 +02:00` - Box 2 configuration added.
+  `config.json` now includes `box_2` at `192.168.0.201:4196`, unit `1`, with
+  channels 1-8 mapped to instruments 9-16. Config parse and `tests/smoke_refactor.py` passed. Bench DI/DO testing and full app
+  verification on the real second module are still pending.
+
+- `[implemented, verified] 2026-06-30 16:59:22 +02:00` - Per-sound Modbus connection indicator added to the React dashboard.
+  `src/audio_loop/web/server.py` now marks each layer with `input_connected`
+  based on both mapping presence and the current Modbus module connection state.
+  `dashboard/src/components/Layers/LayerCard.jsx` renders this as a minimal
+  green/red dot only, and `LayersView.jsx` now uses the same `PageHeader` design
+  as the system page. `tests/smoke_refactor.py`, Python `py_compile`, UTF-8
+  source check, and `npm run build` passed.
+- `[implemented, verified] 2026-06-30 17:12:15 +02:00` - Dashboard shell aligned more closely with `museum-system`.
+  The React app now uses the reference-style MUSEUM sidebar, admin footer,
+  icon-only theme/logout actions, dark theme token support, and a system page
+  layout/toast pattern closer to the original dashboard. `npm run build` passed
+  and UTF-8 source checks passed for the changed React/CSS files.
 ## Implementation order
 
 0. `00A_MODBUS_BRINGUP.md`
@@ -210,6 +233,10 @@ Implementation log:
    - Add the tests and manual verification needed before installing on the
      final Raspberry Pi.
    - Prepare service files, setup checks, and deployment checklist.
+
+6. `06_FINAL_PROGRAMMING_TODO.md`
+   - Short current-state handoff checklist for new chats.
+   - Use this first when asking what programming work remains.
 
 ## Early risk checkpoints
 
