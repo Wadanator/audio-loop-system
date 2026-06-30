@@ -12,6 +12,7 @@ __pycache__/
 # Audio files can be large and room-specific
 audio_files/*.wav
 audio_files/song*/*.wav
+audio_files
 
 # Local backups
 *.backup
