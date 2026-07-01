@@ -6,6 +6,7 @@ import LayersView from './components/Layers/LayersView.jsx';
 import SystemView from './components/System/SystemView.jsx';
 import LoginView from './components/Auth/LoginView.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { ConfirmProvider } from './context/ConfirmContext.jsx';
 import { useDashboardData } from './hooks/useDashboardData.js';
 import useTheme from './hooks/useTheme.js';
 
@@ -38,7 +39,7 @@ function DashboardShell() {
           onPressLayer={dashboard.pressLayer}
         />
       )}
-      {activeView === 'system' && <SystemView />}
+      {activeView === 'system' && <SystemView status={dashboard.status} offline={dashboard.offline} />}
     </AppLayout>
   );
 }
@@ -51,7 +52,9 @@ function AuthenticatedApp() {
 export default function App() {
   return (
     <AuthProvider>
-      <AuthenticatedApp />
+      <ConfirmProvider>
+        <AuthenticatedApp />
+      </ConfirmProvider>
     </AuthProvider>
   );
 }

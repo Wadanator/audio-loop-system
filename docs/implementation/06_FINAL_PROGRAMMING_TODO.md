@@ -23,19 +23,18 @@ Status timestamp: `[documented] 2026-06-30 17:37:20 +02:00`
 
 ## Programming work still worth doing
 
-1. Backend auth enforcement - `[pending]`
-   - Frontend login already exists, but backend API routes do not yet enforce auth.
-   - Protect at least remote press routes before any shared-network deployment.
-   - Protect future system command routes before enabling them.
+1. Backend auth enforcement - `[implemented, verify on RPi] 2026-07-01`
+   - Backend API routes under `/api/` now enforce Basic Auth when `web.auth_enabled` is true.
+   - Frontend login validates credentials against the backend `/api/status` route instead of only checking locally.
+   - Remote press routes and system command routes are protected before shared-network deployment.
 
-2. System tab backend commands - `[pending]`
-   - The `Systém` tab is UI-only right now.
-   - Add backend endpoints for:
-     - restart backend service
-     - reboot Raspberry Pi
-     - shutdown Raspberry Pi
-   - Add confirmation dialogs in the UI before destructive commands.
-   - Keep these endpoints disabled or auth-protected by default.
+2. System tab backend commands - `[implemented, verify on RPi] 2026-07-01`
+   - The `Systém` tab now calls backend endpoints for:
+     - restart backend service via `systemctl --user restart audio_looper.service`
+     - reboot Raspberry Pi via `sudo /usr/sbin/reboot` or `/sbin/reboot`
+     - shutdown Raspberry Pi via `sudo /usr/sbin/shutdown -h now` or `/sbin/shutdown -h now`
+   - The UI uses a museum-system-style confirmation dialog before destructive commands.
+   - System actions require both `web.auth_enabled` and `web.system_actions_enabled`.
 
 3. Audio loader RAM optimization - `[pending]`
    - If `audio.max_loop_length` is set, load only the needed duration instead of reading the whole WAV and trimming afterward.
@@ -48,6 +47,7 @@ Status timestamp: `[documented] 2026-06-30 17:37:20 +02:00`
    - Confirm restart policy and logs are appropriate for the museum install.
    - Confirm dashboard static build is refreshed before deployment.
    - Installer now configures Raspberry Pi 3.5mm headphones output best-effort and sets system audio volume to 95% by default.
+   - Installer now writes a narrow sudoers rule for dashboard reboot/shutdown commands.
 
 5. Box 2 config support - `[implemented, config verified; hardware verification pending] 2026-06-30 16:37:02 +02:00`
    - `config.json` now contains `box_2` at `192.168.0.201:4196`.
@@ -76,12 +76,11 @@ Status timestamp: `[documented] 2026-06-30 17:37:20 +02:00`
 
 ## Suggested next coding order
 
-1. Audio loader RAM optimization.
-2. Backend auth enforcement.
-3. System command endpoints and confirmations.
-4. Raspberry Pi systemd deployment files.
-5. Runtime fault tests and fixes.
-6. Box 2 DI/DO and full app verification on hardware.
+1. Build and smoke-test the dashboard/backend package after the auth/system-action wiring.
+2. Audio loader RAM optimization.
+3. Raspberry Pi service/reboot/shutdown verification on hardware.
+4. Runtime fault tests and fixes.
+5. Box 2 DI/DO and full app verification on hardware.
 
 ## New-chat handoff prompt
 

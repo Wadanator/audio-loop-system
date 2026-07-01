@@ -215,8 +215,8 @@ Expected result:
    - Frontend login panel now matches `museum-system` and uses the same default
      credentials: `admin` / `admin12321`.
    - Successful login stores localStorage `auth_header` and API requests send it.
-   - Backend auth enforcement remains pending before final deployment.
-   - Remote press must be protected on the backend before final install.
+   - Backend auth enforcement is implemented for `/api/` routes when `web.auth_enabled` is true.
+   - Remote press and system command routes are protected on the backend before final install.
 
 4. Make web optional - `[implemented] 2026-06-29 11:20:00 +02:00`
    - Config:
@@ -227,7 +227,11 @@ Expected result:
     "enabled": true,
     "host": "0.0.0.0",
     "port": 8000,
-    "auth_enabled": false
+    "auth_enabled": true,
+    "username": "admin",
+    "password": "admin12321",
+    "system_actions_enabled": true,
+    "system_service_name": "audio_looper.service"
   }
 }
 ```
@@ -237,6 +241,13 @@ Expected result:
 
 ## Implementation log
 
+- `[implemented] 2026-07-01` - Backend auth and system actions wired.
+  `/api/` routes now enforce Basic Auth when enabled in `config.json`, frontend
+  login validates against the backend, and the System tab calls authenticated
+  endpoints for service restart, Raspberry Pi reboot, and Raspberry Pi shutdown.
+  The dashboard uses a local confirmation dialog matching the museum-system
+  interaction pattern. `install.sh` configures a narrow sudoers rule for only the
+  reboot/shutdown commands.
 - `[implemented] 2026-06-29 11:20:00 +02:00` - Backend dashboard API started.
   `src/audio_loop/web/server.py` serves `/health`, `/api/status`, `/api/layers`,
   `/api/stats`, and `POST /api/layers/<instrument>/press`. Remote press routes
@@ -301,8 +312,7 @@ Expected result:
   Added the `museum-system`-style login panel with the same default credentials
   (`admin` / `admin12321`), localStorage `auth_header`, and matching API auth
   header shape. Added a `Systém` navigation tab with backend/RPi restart and
-  shutdown buttons as UI-only prepared actions; backend command endpoints are
-  intentionally not wired yet. Removed the separate INPUT/LED boxes from sound
+  shutdown buttons wired to authenticated backend command endpoints with confirmation dialogs. Removed the separate INPUT/LED boxes from sound
   cards so the operator sees only status, count, and the remote sound button;
   the green active card and real panel LED remain the normal feedback.
   Changed files: `src/audio_loop/stats/collector.py`, `tests/smoke_refactor.py`,

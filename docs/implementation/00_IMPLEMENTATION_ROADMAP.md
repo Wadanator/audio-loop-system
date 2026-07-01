@@ -154,7 +154,7 @@ Implementation log:
   existing `stats.json` without `[WinError 183]`, and `tests/smoke_refactor.py`
   covers that replacement case. The React dashboard now has a `museum-system`-
   style login panel (`admin` / `admin12321`), sends `auth_header` on API calls,
-  includes a UI-only `Systém` tab for future backend/RPi restart actions, and
+  includes a wired `Systém` tab for authenticated backend/RPi restart actions, and
   removes the separate INPUT/LED boxes from sound cards. `py_compile`,
   `tests/smoke_refactor.py`, and `npm run build` passed.
 - `[pending]` - Run the real Box 1 app after the refactor/config cleanup to

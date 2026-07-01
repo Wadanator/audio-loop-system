@@ -99,14 +99,16 @@ Expected startup signs:
 - Modbus bus connects to Box 1
 - Modbus input handler starts for one module
 - LED controller starts for 8 outputs
-- stats server starts on port 8000
+- dashboard/API server starts on port 8000
 
 ## Web
 
-The current stats server is available at:
+The room dashboard is available at:
 
 ```text
 http://<rpi-ip>:8000
 ```
 
-The richer room dashboard is planned in `docs/implementation/03_WEB_DASHBOARD.md`.
+Default login for the museum LAN install is `admin` / `admin12321`. Change `web.username` and `web.password` in `config.json` before handing the system to operators if the room needs a different password.
+
+The `Systém` tab can restart `audio_looper.service`, reboot the Raspberry Pi, or shut it down. `install.sh` writes a narrow `/etc/sudoers.d/audio-loop-system` rule for only the required reboot/shutdown commands; the service restart uses the user systemd unit and does not need sudo.

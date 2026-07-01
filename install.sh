@@ -29,6 +29,23 @@ else
 fi
 
 sudo usermod -aG audio "$USER_NAME" || true
+configure_system_action_sudoers() {
+    if [[ "$(uname -s)" != "Linux" ]]; then
+        return 0
+    fi
+
+    local sudoers_file="/etc/sudoers.d/audio-loop-system"
+    local sudoers_content="$USER_NAME ALL=(root) NOPASSWD: /usr/sbin/reboot, /sbin/reboot, /usr/sbin/shutdown, /sbin/shutdown"
+
+    echo "Configuring dashboard reboot/shutdown permissions..."
+    printf '%s\n' "$sudoers_content" | sudo tee "$sudoers_file" >/dev/null
+    sudo chmod 0440 "$sudoers_file"
+    if command -v visudo >/dev/null 2>&1; then
+        sudo visudo -cf "$sudoers_file" >/dev/null
+    fi
+}
+
+configure_system_action_sudoers
 
 if [[ -f "scripts/configure_rpi_audio.sh" ]]; then
     AUDIO_LOOP_VOLUME_PERCENT="${AUDIO_LOOP_VOLUME_PERCENT:-95}" \

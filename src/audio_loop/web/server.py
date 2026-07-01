@@ -1,13 +1,18 @@
 """Flask dashboard server and API routes for the audio loop room."""
 
+import hmac
 import json
 import logging
 import mimetypes
+import platform
+import shutil
+import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from flask import Flask, Response, jsonify, send_file
+from flask import Flask, Response, jsonify, request, send_file
 from werkzeug.serving import make_server
 
 from audio_loop.infra.paths import runtime_path
@@ -15,12 +20,37 @@ from audio_loop.infra.paths import runtime_path
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_WEB_USERNAME = "admin"
+DEFAULT_WEB_PASSWORD = "admin12321"
+DEFAULT_SERVICE_NAME = "audio_looper.service"
+SYSTEM_ACTION_DELAY_SECONDS = 0.8
+
 
 class DashboardService:
     """Build dashboard API payloads from the running audio loop context."""
 
     def __init__(self, context: Optional[Dict[str, Any]] = None):
         self.context = context or {}
+
+    def web_config(self) -> Dict[str, Any]:
+        config = self.context.get("config", {})
+        return config.get("web", {}) or {}
+
+    def auth_enabled(self) -> bool:
+        return bool(self.web_config().get("auth_enabled", False))
+
+    def auth_credentials(self) -> tuple[str, str]:
+        web_config = self.web_config()
+        return (
+            str(web_config.get("username", DEFAULT_WEB_USERNAME)),
+            str(web_config.get("password", DEFAULT_WEB_PASSWORD)),
+        )
+
+    def system_actions_enabled(self) -> bool:
+        return bool(self.web_config().get("system_actions_enabled", False))
+
+    def system_service_name(self) -> str:
+        return str(self.web_config().get("system_service_name", DEFAULT_SERVICE_NAME))
 
     def health_payload(self) -> Dict[str, Any]:
         uptime_start = self.context.get("started_at", time.time())
@@ -35,6 +65,7 @@ class DashboardService:
 
     def status_payload(self) -> Dict[str, Any]:
         config = self.context.get("config", {})
+        web_config = config.get("web", {}) or {}
         engine_status = self.engine_status()
         modbus_status = self.modbus_status()
         module_count = len(modbus_status)
@@ -56,7 +87,9 @@ class DashboardService:
             "time_until_timeout": engine_status.get("time_until_timeout", 0),
             "total_sessions": engine_status.get("total_sessions", 0),
             "song_rotation_enabled": engine_status.get("song_rotation_enabled", False),
-            "web_enabled": bool(config.get("web", {}).get("enabled", True)),
+            "web_enabled": bool(web_config.get("enabled", True)),
+            "auth_enabled": bool(web_config.get("auth_enabled", False)),
+            "system_actions_enabled": self.system_actions_enabled(),
             "input_provider": config.get("inputs", {}).get("provider"),
             "output_provider": config.get("outputs", {}).get("provider"),
             "modbus_connected": module_count > 0 and connected_modules == module_count,
@@ -240,6 +273,66 @@ def _json_response(payload: Any, status: int = 200):
     return response
 
 
+def _unauthorized_response():
+    response = _json_response(
+        {"ok": False, "error": "unauthorized", "detail": "authentication_required"},
+        401,
+    )
+    response.headers["WWW-Authenticate"] = 'Basic realm="Audio Loop Dashboard"'
+    return response
+
+
+def _is_request_authorized(service: DashboardService) -> bool:
+    auth = request.authorization
+    if auth is None:
+        return False
+
+    expected_username, expected_password = service.auth_credentials()
+    return hmac.compare_digest(auth.username or "", expected_username) and hmac.compare_digest(
+        auth.password or "",
+        expected_password,
+    )
+
+
+def _running_on_linux() -> bool:
+    return platform.system().lower() == "linux"
+
+
+def _first_existing_path(candidates: tuple[str, ...], fallback: str) -> str:
+    for candidate in candidates:
+        if Path(candidate).exists():
+            return candidate
+    return shutil.which(fallback) or candidates[0]
+
+
+def _system_action_command(action_name: str, service: DashboardService) -> list[str]:
+    if action_name == "restart_service":
+        return ["systemctl", "--user", "restart", service.system_service_name()]
+    if action_name == "reboot":
+        reboot_path = _first_existing_path(("/usr/sbin/reboot", "/sbin/reboot"), "reboot")
+        return ["sudo", reboot_path]
+    if action_name == "shutdown":
+        shutdown_path = _first_existing_path(("/usr/sbin/shutdown", "/sbin/shutdown"), "shutdown")
+        return ["sudo", shutdown_path, "-h", "now"]
+    raise ValueError(f"Unsupported system action: {action_name}")
+
+
+def _schedule_system_command(command: list[str], *, delay: float = SYSTEM_ACTION_DELAY_SECONDS):
+    def runner():
+        time.sleep(max(0, delay))
+        subprocess.Popen(
+            command,
+            shell=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+
+
 def create_dashboard_app(
     *,
     stats_collector=None,
@@ -263,6 +356,18 @@ def create_dashboard_app(
             "started_at": time.time(),
         }
     )
+
+    @flask_app.before_request
+    def require_api_auth():
+        if not request.path.startswith("/api/"):
+            return None
+
+        service = flask_app.config["DASHBOARD_SERVICE"]
+        if not service.auth_enabled():
+            return None
+        if _is_request_authorized(service):
+            return None
+        return _unauthorized_response()
 
     @flask_app.get("/health")
     def health():
@@ -314,6 +419,49 @@ def create_dashboard_app(
                 "status": service.status_payload(),
             }
         )
+
+    def run_system_action(action_name: str, success_message: str):
+        service = flask_app.config["DASHBOARD_SERVICE"]
+        if not service.system_actions_enabled():
+            return _json_response(
+                {"ok": False, "error": "system_actions_disabled"},
+                403,
+            )
+        if not service.auth_enabled():
+            return _json_response(
+                {"ok": False, "error": "system_actions_require_auth"},
+                403,
+            )
+        if not _running_on_linux():
+            return _json_response(
+                {"ok": False, "error": "system_actions_linux_only"},
+                501,
+            )
+
+        try:
+            command = _system_action_command(action_name, service)
+            _schedule_system_command(command)
+        except Exception as exc:
+            logger.error("Failed to schedule system action %s: %s", action_name, exc)
+            return _json_response(
+                {"ok": False, "error": "system_action_failed", "detail": str(exc)},
+                500,
+            )
+
+        logger.warning("System action requested from dashboard: %s", action_name)
+        return _json_response({"ok": True, "action": action_name, "message": success_message})
+
+    @flask_app.post("/api/system/restart_service")
+    def restart_service():
+        return run_system_action("restart_service", "Service restart scheduled")
+
+    @flask_app.post("/api/system/reboot")
+    def reboot_system():
+        return run_system_action("reboot", "System reboot scheduled")
+
+    @flask_app.post("/api/system/shutdown")
+    def shutdown_system():
+        return run_system_action("shutdown", "System shutdown scheduled")
 
     @flask_app.get("/")
     @flask_app.get("/<path:request_path>")

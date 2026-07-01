@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { api } from '../services/api.js';
 
 const AUTH_STORAGE_KEY = 'auth_header';
-const VALID_USERNAME = 'admin';
-const VALID_PASSWORD = 'admin12321';
 
 const AuthContext = createContext(null);
 
@@ -11,16 +10,17 @@ export function AuthProvider({ children }) {
   const [loginError, setLoginError] = useState('');
 
   const login = useCallback(async (username, password) => {
-    const normalizedUsername = username.trim();
-    if (normalizedUsername === VALID_USERNAME && password === VALID_PASSWORD) {
-      localStorage.setItem(AUTH_STORAGE_KEY, `Basic ${btoa(`${normalizedUsername}:${password}`)}`);
+    try {
+      const authHeader = await api.login(username, password);
+      localStorage.setItem(AUTH_STORAGE_KEY, authHeader);
       setLoginError('');
       setIsAuthenticated(true);
       return true;
+    } catch (error) {
+      setLoginError(error?.message || 'Zlé heslo alebo meno');
+      setIsAuthenticated(false);
+      return false;
     }
-
-    setLoginError('Zlé heslo alebo meno');
-    return false;
   }, []);
 
   const logout = useCallback(() => {

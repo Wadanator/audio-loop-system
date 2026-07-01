@@ -5,6 +5,7 @@ verify that imports stay clean and the core button-to-layer behavior remains
 stable while files move into packages.
 """
 
+import base64
 import importlib
 import json
 import logging
@@ -462,6 +463,74 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
     assert response.get_json()["ok"] is True
     assert engine.pressed == [2]
 
+
+def _basic_auth(username: str, password: str) -> str:
+    token = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+    return f"Basic {token}"
+
+
+def test_dashboard_auth_and_system_actions_are_guarded():
+    server_module = importlib.import_module("audio_loop.web.server")
+
+    disabled_app = server_module.create_dashboard_app(
+        config={"web": {"auth_enabled": False, "system_actions_enabled": True}},
+    )
+    disabled_response = disabled_app.test_client().post("/api/system/reboot")
+    assert disabled_response.status_code == 403
+    assert disabled_response.get_json()["error"] == "system_actions_require_auth"
+
+    scheduled_commands = []
+    original_schedule = server_module._schedule_system_command
+    original_linux_check = server_module._running_on_linux
+    try:
+        def fake_schedule(command, *, delay=server_module.SYSTEM_ACTION_DELAY_SECONDS):
+            scheduled_commands.append((list(command), delay))
+
+        server_module._schedule_system_command = fake_schedule
+        server_module._running_on_linux = lambda: True
+
+        app = server_module.create_dashboard_app(
+            config={
+                "performance": {"max_concurrent_sounds": 2},
+                "web": {
+                    "auth_enabled": True,
+                    "username": "admin",
+                    "password": "secret",
+                    "system_actions_enabled": True,
+                    "system_service_name": "audio_looper.service",
+                },
+            },
+        )
+        client = app.test_client()
+
+        assert client.get("/api/status").status_code == 401
+        assert client.get(
+            "/api/status",
+            headers={"Authorization": _basic_auth("admin", "wrong")},
+        ).status_code == 401
+
+        headers = {"Authorization": _basic_auth("admin", "secret")}
+        status_response = client.get("/api/status", headers=headers)
+        assert status_response.status_code == 200
+        status_payload = status_response.get_json()
+        assert status_payload["auth_enabled"] is True
+        assert status_payload["system_actions_enabled"] is True
+
+        restart_response = client.post("/api/system/restart_service", headers=headers)
+        assert restart_response.status_code == 200
+        assert scheduled_commands[-1][0] == [
+            "systemctl",
+            "--user",
+            "restart",
+            "audio_looper.service",
+        ]
+
+        shutdown_response = client.post("/api/system/shutdown", headers=headers)
+        assert shutdown_response.status_code == 200
+        assert scheduled_commands[-1][0][-2:] == ["-h", "now"]
+    finally:
+        server_module._schedule_system_command = original_schedule
+        server_module._running_on_linux = original_linux_check
 if __name__ == "__main__":
     test_import_main_does_not_import_gpio_or_legacy_wrappers()
     test_config_module_loads_current_config()
@@ -470,6 +539,7 @@ if __name__ == "__main__":
     test_pymodbus_log_filters_protect_disk_and_rate_limit_console()
     test_modbus_button_status_reports_debounced_input_state()
     test_dashboard_layers_payload_uses_live_input_and_led_state()
+    test_dashboard_auth_and_system_actions_are_guarded()
     test_looper_engine_toggles_layer_after_min_on_window()
     test_looper_engine_ignores_repeat_press_while_locked()
     test_looper_engine_rearms_after_off_cooldown()
