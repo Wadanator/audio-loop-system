@@ -308,13 +308,16 @@ class AudioManager:
         frames: int,
         time,
         status
-    ):
+        ):
         """Fill the output buffer with the current mix of active tracks.
 
         Called by the sounddevice audio thread on every buffer period.
         Uses a non-blocking lock acquisition: if ``audio_data_lock`` is
         held by the song-switch thread, silence is returned immediately
         rather than blocking the real-time audio thread.
+
+        Implements sample-accurate volume interpolation to prevent zipper
+        noise during fade-ins and fade-outs.
 
         Args:
             outdata: Output buffer to fill (shape: [frames, 1]).
@@ -346,14 +349,42 @@ class AudioManager:
             pos = self.master_position % self.loop_length_samples
             available_until_loop = self.loop_length_samples - pos
 
+            # 1. Calculate sample-accurate volume envelopes for all tracks
+            vol_envelopes = {}
+            for track_id in self._instrument_numbers():
+                current_vol = self.volumes[track_id]
+                target_vol = self.target_volumes[track_id]
+                fade_rate = self.fade_rates[track_id]
+
+                if abs(current_vol - target_vol) > 0.0001 and fade_rate > 0:
+                    volume_change = fade_rate * frames
+                    if current_vol < target_vol:
+                        end_vol = min(target_vol, current_vol + volume_change)
+                    else:
+                        end_vol = max(target_vol, current_vol - volume_change)
+                    
+                    # Create a linear fade envelope for this buffer block
+                    vol_envelopes[track_id] = np.linspace(
+                        current_vol, end_vol, frames, dtype=np.float32
+                    )
+                    
+                    # Store the final volume of this block for the next callback iteration
+                    self.volumes[track_id] = end_vol
+                else:
+                    # Constant volume for this block (no active fade)
+                    vol_envelopes[track_id] = current_vol
+
+            # 2. Mix tracks into the output buffer using the calculated envelopes
             if frames <= available_until_loop:
                 # Simple case: the requested frames do not cross the loop end.
                 for track_id, track_data in self.audio_tracks.items():
-                    volume = self.volumes[track_id]
-                    if volume > 0.001:
-                        outdata[:frames, 0] += (
-                            track_data[pos:pos + frames] * volume
-                        )
+                    env = vol_envelopes.get(track_id, 0.0)
+                    
+                    # Skip rendering if the track is completely silent
+                    if isinstance(env, float) and env < 0.001:
+                        continue
+                        
+                    outdata[:frames, 0] += (track_data[pos:pos + frames] * env)
 
                 self.master_position += frames
             else:
@@ -362,37 +393,27 @@ class AudioManager:
                 second_part = frames - first_part
 
                 for track_id, track_data in self.audio_tracks.items():
-                    volume = self.volumes[track_id]
-                    if volume > 0.001:
+                    env = vol_envelopes.get(track_id, 0.0)
+                    
+                    if isinstance(env, float) and env < 0.001:
+                        continue
+                        
+                    if isinstance(env, float):
+                        # Constant volume across the boundary
                         if first_part > 0:
-                            outdata[:first_part, 0] += (
-                                track_data[pos:pos + first_part] * volume
-                            )
+                            outdata[:first_part, 0] += (track_data[pos:pos + first_part] * env)
                         if second_part > 0:
-                            outdata[first_part:frames, 0] += (
-                                track_data[:second_part] * volume
-                            )
+                            outdata[first_part:frames, 0] += (track_data[:second_part] * env)
+                    else:
+                        # Dynamic envelope across the boundary
+                        if first_part > 0:
+                            outdata[:first_part, 0] += (track_data[pos:pos + first_part] * env[:first_part])
+                        if second_part > 0:
+                            outdata[first_part:frames, 0] += (track_data[:second_part] * env[first_part:])
 
                 self.master_position = second_part
         finally:
             self.audio_data_lock.release()
-
-        # Apply linear volume fading for each track toward its target level.
-        for track_id in self._instrument_numbers():
-            current_vol = self.volumes[track_id]
-            target_vol = self.target_volumes[track_id]
-            fade_rate = self.fade_rates[track_id]
-
-            if abs(current_vol - target_vol) > 0.0001 and fade_rate > 0:
-                volume_change = fade_rate * frames
-                if current_vol < target_vol:
-                    self.volumes[track_id] = min(
-                        target_vol, current_vol + volume_change
-                    )
-                else:
-                    self.volumes[track_id] = max(
-                        target_vol, current_vol - volume_change
-                    )
 
         # Hard clip to prevent digital clipping on the output.
         np.clip(outdata, -0.95, 0.95, out=outdata)

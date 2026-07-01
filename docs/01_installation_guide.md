@@ -9,7 +9,7 @@ This project is currently a development build for one museum room. The runtime i
 - Current verified module: Box 1 at `192.168.0.200:4196`, Modbus unit `1`.
 - Box 1 provides DI1-DI8 and DO1-DO8.
 - Box 2 is configured at `192.168.0.201:4196`, Modbus unit `1`, for inputs/outputs 9-16; hardware verification is still pending.
-- Audio output through USB DAC, HDMI, or the system default audio device.
+- Audio output is intended for the Raspberry Pi 3.5mm headphones jack feeding active speakers. The installer sets this as the preferred route where Raspberry Pi OS supports it.
 
 Direct Raspberry Pi GPIO buttons are not part of the current system. Do not add `RPi.GPIO` back as a runtime dependency.
 
@@ -30,6 +30,18 @@ On Raspberry Pi, run the same entrypoint from the project root:
 ```bash
 python3 main.py
 ```
+
+## Raspberry Pi Audio Output
+
+`install.sh` runs a best-effort Raspberry Pi audio setup:
+
+- installs `alsa-utils` for `amixer`
+- prefers the 3.5mm headphones jack using `raspi-config nonint do_audio 1`
+- falls back to the legacy ALSA route control `amixer cset numid=3 1`
+- sets output volume to `AUDIO_LOOP_VOLUME_PERCENT`, default `95`
+- repeats the volume setup before the audio service starts
+
+This keeps the Pi output above 90% for active speakers without making the installer fail on an OS image with a different audio stack. If a custom USB DAC or HDMI output is used later, set the OS default output manually or set `audio.output_device` in `config.json`.
 
 ## Configuration
 

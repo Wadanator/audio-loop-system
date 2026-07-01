@@ -18,7 +18,7 @@ echo "User: $USER_NAME"
 
 if command -v apt >/dev/null 2>&1; then
     sudo apt update
-    sudo apt install -y python3 python3-pip python3-numpy libportaudio2 libsndfile1
+    sudo apt install -y python3 python3-pip python3-numpy libportaudio2 libsndfile1 alsa-utils
 fi
 
 if python3 -m pip install --user -r requirements.txt; then
@@ -29,6 +29,12 @@ else
 fi
 
 sudo usermod -aG audio "$USER_NAME" || true
+
+if [[ -f "scripts/configure_rpi_audio.sh" ]]; then
+    AUDIO_LOOP_VOLUME_PERCENT="${AUDIO_LOOP_VOLUME_PERCENT:-95}" \
+        bash scripts/configure_rpi_audio.sh --install
+fi
+
 mkdir -p logs "$SERVICE_DIR"
 
 cat > "$SERVICE_FILE" <<EOF
@@ -41,6 +47,7 @@ StartLimitBurst=5
 
 [Service]
 Type=notify
+ExecStartPre=/bin/bash $PROJECT_DIR/scripts/configure_rpi_audio.sh --volume-only
 ExecStart=/usr/bin/python3 $PROJECT_DIR/main.py
 WorkingDirectory=$PROJECT_DIR
 Restart=on-failure
@@ -48,6 +55,7 @@ RestartSec=10
 KillSignal=SIGTERM
 TimeoutStopSec=30
 Environment=PYTHONUNBUFFERED=1
+Environment=AUDIO_LOOP_VOLUME_PERCENT=${AUDIO_LOOP_VOLUME_PERCENT:-95}
 WatchdogSec=60
 
 [Install]

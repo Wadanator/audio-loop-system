@@ -8,6 +8,16 @@
     "provider": "modbus_panel",
     "enabled": true
   },
+  "layer_labels": {
+    "1": "Bubny",
+    "2": "Bass",
+    "3": "Gitara",
+    "4": "Piano",
+    "5": "Trúbky",
+    "6": "Saxofón",
+    "7": "Trombón",
+    "8": "Spev"
+  },
   "modbus_panel": {
     "enabled": true,
     "port": 4196,
@@ -57,7 +67,7 @@
   "timeouts": {
     "global_timeout": 75,
     "instrument_timeout": 60,
-    "fade_duration": 2
+    "fade_duration": 2.5
   },
   "jack": {
     "sample_rate": 48000,
@@ -71,7 +81,7 @@
   },
   "audio": {
     "output_device": null,
-    "max_loop_length": 180
+    "max_loop_length": 240
   },
   "web": {
     "enabled": true,

@@ -42,11 +42,12 @@ Status timestamp: `[documented] 2026-06-30 17:37:20 +02:00`
    - This matters for large source songs, even if the final target is around 3 minutes.
    - Keep all tracks in one song normalized to the same length and sample rate.
 
-4. Raspberry Pi deployment files - `[pending]`
+4. Raspberry Pi deployment files - `[partially implemented] 2026-07-01`
    - Finalize systemd service file for the new `main.py` entry point.
    - Confirm `WorkingDirectory` points to the project directory.
    - Confirm restart policy and logs are appropriate for the museum install.
    - Confirm dashboard static build is refreshed before deployment.
+   - Installer now configures Raspberry Pi 3.5mm headphones output best-effort and sets system audio volume to 95% by default.
 
 5. Box 2 config support - `[implemented, config verified; hardware verification pending] 2026-06-30 16:37:02 +02:00`
    - `config.json` now contains `box_2` at `192.168.0.201:4196`.
