@@ -422,7 +422,10 @@ def test_dashboard_layers_payload_uses_live_input_and_led_state():
         "input_handler": FakeInput(),
         "led_controller": FakeLed(),
         "modbus_bus": FakeBus(),
-        "config": {"performance": {"max_concurrent_sounds": 3}},
+        "config": {
+            "performance": {"max_concurrent_sounds": 3},
+            "web": {"logs": {"persist_enabled": False, "load_limit": 0}},
+        },
     }
     service = server_module.DashboardService(context)
     payload = service.layers_payload()
@@ -473,7 +476,7 @@ def test_dashboard_auth_and_system_actions_are_guarded():
     server_module = importlib.import_module("audio_loop.web.server")
 
     disabled_app = server_module.create_dashboard_app(
-        config={"web": {"auth_enabled": False, "system_actions_enabled": True}},
+        config={"web": {"auth_enabled": False, "system_actions_enabled": True, "logs": {"persist_enabled": False, "load_limit": 0}}},
     )
     disabled_response = disabled_app.test_client().post("/api/system/reboot")
     assert disabled_response.status_code == 403
@@ -498,6 +501,7 @@ def test_dashboard_auth_and_system_actions_are_guarded():
                     "password": "secret",
                     "system_actions_enabled": True,
                     "system_service_name": "audio_looper.service",
+                    "logs": {"persist_enabled": False, "load_limit": 0},
                 },
             },
         )
@@ -531,6 +535,53 @@ def test_dashboard_auth_and_system_actions_are_guarded():
     finally:
         server_module._schedule_system_command = original_schedule
         server_module._running_on_linux = original_linux_check
+
+
+def test_dashboard_logs_capture_warnings_and_manual_audit_events():
+    server_module = importlib.import_module("audio_loop.web.server")
+
+    app = server_module.create_dashboard_app(
+        config={
+            "web": {
+                "auth_enabled": False,
+                "logs": {
+                    "persist_enabled": False,
+                    "load_limit": 0,
+                    "min_level": "WARNING",
+                    "include_info_loggers": ["audio_loop.audit"],
+                },
+            },
+        },
+    )
+    service = app.config["DASHBOARD_SERVICE"]
+    service.clear_logs()
+
+    logging.getLogger("audio_loop.noise").info("Routine physical button event")
+    logging.getLogger("audio_loop.audit").info(
+        "Dashboard remote sound press: instrument %s from %s",
+        3,
+        "test-client",
+    )
+    logging.getLogger("audio_loop.hardware.modbus_bus").warning("Box 2 offline")
+
+    client = app.test_client()
+    response = client.get("/api/logs")
+    assert response.status_code == 200
+    payload = response.get_json()
+    messages = [entry["message"] for entry in payload["logs"]]
+
+    assert "Routine physical button event" not in messages
+    assert any("Dashboard remote sound press" in message for message in messages)
+    assert "Box 2 offline" in messages
+
+    warnings = client.get("/api/logs?level=WARNING").get_json()["logs"]
+    assert [entry["message"] for entry in warnings] == ["Box 2 offline"]
+
+    clear_response = client.post("/api/logs/clear")
+    assert clear_response.status_code == 200
+    assert client.get("/api/logs").get_json()["logs"] == []
+
+
 if __name__ == "__main__":
     test_import_main_does_not_import_gpio_or_legacy_wrappers()
     test_config_module_loads_current_config()
@@ -540,6 +591,7 @@ if __name__ == "__main__":
     test_modbus_button_status_reports_debounced_input_state()
     test_dashboard_layers_payload_uses_live_input_and_led_state()
     test_dashboard_auth_and_system_actions_are_guarded()
+    test_dashboard_logs_capture_warnings_and_manual_audit_events()
     test_looper_engine_toggles_layer_after_min_on_window()
     test_looper_engine_ignores_repeat_press_while_locked()
     test_looper_engine_rearms_after_off_cooldown()

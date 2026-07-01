@@ -92,6 +92,18 @@
     "username": "admin",
     "password": "admin12321",
     "system_actions_enabled": true,
-    "system_service_name": "audio_looper.service"
+    "system_service_name": "audio_looper.service",
+    "logs": {
+      "enabled": true,
+      "min_level": "WARNING",
+      "max_entries": 1000,
+      "load_limit": 250,
+      "persist_enabled": true,
+      "persist_path": "logs/dashboard_events.jsonl",
+      "max_file_bytes": 1048576,
+      "backup_count": 5,
+      "include_info_loggers": ["audio_loop.audit"],
+      "ignored_loggers": ["werkzeug", "flask"]
+    }
   }
 }
