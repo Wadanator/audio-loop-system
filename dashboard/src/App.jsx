@@ -3,6 +3,7 @@ import AppLayout from './components/Layout/AppLayout.jsx';
 import RuntimeStatusBar from './components/Runtime/RuntimeStatusBar.jsx';
 import OverviewView from './components/Overview/OverviewView.jsx';
 import LayersView from './components/Layers/LayersView.jsx';
+import LogsView from './components/Logs/LogsView.jsx';
 import SystemView from './components/System/SystemView.jsx';
 import LoginView from './components/Auth/LoginView.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
@@ -39,6 +40,7 @@ function DashboardShell() {
           onPressLayer={dashboard.pressLayer}
         />
       )}
+      {activeView === 'logs' && <LogsView />}
       {activeView === 'system' && <SystemView status={dashboard.status} offline={dashboard.offline} />}
     </AppLayout>
   );

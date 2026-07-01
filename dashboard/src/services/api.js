@@ -63,6 +63,15 @@ export const api = {
   getStatus: () => request('/api/status'),
   getLayers: () => request('/api/layers'),
   getStats: () => request('/api/stats'),
+  getLogs: ({ level = '', limit = 250 } = {}) => {
+    const params = new URLSearchParams();
+    if (level) params.set('level', level);
+    if (limit) params.set('limit', String(limit));
+    const query = params.toString();
+    return request(`/api/logs${query ? `?${query}` : ''}`);
+  },
+  clearLogs: () => request('/api/logs/clear', { method: 'POST' }),
+  exportLogsUrl: () => '/api/logs/export?limit=5000',
   pressLayer: (instrument) => request(`/api/layers/${instrument}/press`, { method: 'POST' }),
   restartService: () => request('/api/system/restart_service', { method: 'POST' }),
   rebootSystem: () => request('/api/system/reboot', { method: 'POST' }),

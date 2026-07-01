@@ -16,9 +16,11 @@ from flask import Flask, Response, jsonify, request, send_file
 from werkzeug.serving import make_server
 
 from audio_loop.infra.paths import runtime_path
+from audio_loop.web.dashboard_logs import configure_dashboard_logging
 
 
 logger = logging.getLogger(__name__)
+audit_logger = logging.getLogger("audio_loop.audit")
 
 DEFAULT_WEB_USERNAME = "admin"
 DEFAULT_WEB_PASSWORD = "admin12321"
@@ -60,6 +62,7 @@ class DashboardService:
             "web": "running",
             "web_backend": "flask",
             "dashboard_built": (self.static_root() / "index.html").exists(),
+            "dashboard_logs": self.log_store() is not None,
             "uptime_seconds": max(0, time.time() - uptime_start),
         }
 
@@ -99,6 +102,7 @@ class DashboardService:
             "modbus_disconnected_modules": disconnected_modules,
             "modbus": modbus_status,
             "leds": self.led_status(),
+            "log_count": self.log_count(),
             "updated_at": time.time(),
         }
 
@@ -145,6 +149,27 @@ class DashboardService:
     def stats_payload(self) -> Dict[str, Any]:
         stats = self.get_stats()
         return {"ok": stats is not None, "stats": stats or {}}
+
+    def logs_payload(self, *, level: str = "", limit: int = 250) -> Dict[str, Any]:
+        store = self.log_store()
+        if store is None:
+            return {"ok": False, "logs": [], "updated_at": time.time()}
+        logs = store.get_history(level=level, limit=limit)
+        return {"ok": True, "logs": logs, "updated_at": time.time()}
+
+    def clear_logs(self) -> bool:
+        store = self.log_store()
+        if store is None:
+            return False
+        store.clear()
+        return True
+
+    def log_count(self) -> int:
+        store = self.log_store()
+        return store.count() if store is not None else 0
+
+    def log_store(self):
+        return self.context.get("log_store")
 
     def engine_status(self) -> Dict[str, Any]:
         engine = self.context.get("looper_engine")
@@ -273,6 +298,14 @@ def _json_response(payload: Any, status: int = 200):
     return response
 
 
+def _request_limit(default: int = 250, maximum: int = 1000) -> int:
+    try:
+        raw_limit = int(request.args.get("limit", default))
+    except (TypeError, ValueError):
+        raw_limit = default
+    return max(0, min(maximum, raw_limit))
+
+
 def _unauthorized_response():
     response = _json_response(
         {"ok": False, "error": "unauthorized", "detail": "authentication_required"},
@@ -345,6 +378,7 @@ def create_dashboard_app(
     """Create the Flask app used by the dashboard/API server."""
     flask_app = Flask(__name__, static_folder=None)
     flask_app.config["JSON_AS_ASCII"] = False
+    dashboard_log_store = configure_dashboard_logging(config or {})
     flask_app.config["DASHBOARD_SERVICE"] = DashboardService(
         {
             "stats_collector": stats_collector,
@@ -353,6 +387,7 @@ def create_dashboard_app(
             "led_controller": led_controller,
             "modbus_bus": modbus_bus,
             "config": config or {},
+            "log_store": dashboard_log_store,
             "started_at": time.time(),
         }
     )
@@ -389,6 +424,35 @@ def create_dashboard_app(
         service = flask_app.config["DASHBOARD_SERVICE"]
         return _json_response(service.stats_payload())
 
+    @flask_app.get("/api/logs")
+    def logs():
+        service = flask_app.config["DASHBOARD_SERVICE"]
+        return _json_response(
+            service.logs_payload(
+                level=request.args.get("level", ""),
+                limit=_request_limit(),
+            )
+        )
+
+    @flask_app.post("/api/logs/clear")
+    def clear_logs():
+        service = flask_app.config["DASHBOARD_SERVICE"]
+        if service.clear_logs():
+            return _json_response({"ok": True, "message": "Logs cleared"})
+        return _json_response({"ok": False, "error": "logs_unavailable"}, 503)
+
+    @flask_app.get("/api/logs/export")
+    def export_logs():
+        service = flask_app.config["DASHBOARD_SERVICE"]
+        payload = service.logs_payload(limit=_request_limit(default=1000, maximum=5000))
+        response = Response(
+            json.dumps(payload.get("logs", []), ensure_ascii=False, indent=2),
+            content_type="application/json; charset=utf-8",
+        )
+        response.headers["Content-Disposition"] = "attachment; filename=audio_loop_logs.json"
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @flask_app.post("/api/layers/<int:instrument>/press")
     def press_layer(instrument: int):
         service = flask_app.config["DASHBOARD_SERVICE"]
@@ -405,6 +469,11 @@ def create_dashboard_app(
 
         try:
             engine.handle_button_press(instrument)
+            audit_logger.info(
+                "Dashboard remote sound press: instrument %s from %s",
+                instrument,
+                request.remote_addr or "unknown",
+            )
         except Exception as exc:
             logger.error("Remote press failed for instrument %s: %s", instrument, exc)
             return _json_response(
@@ -448,7 +517,11 @@ def create_dashboard_app(
                 500,
             )
 
-        logger.warning("System action requested from dashboard: %s", action_name)
+        audit_logger.warning(
+            "Dashboard system action requested: %s from %s",
+            action_name,
+            request.remote_addr or "unknown",
+        )
         return _json_response({"ok": True, "action": action_name, "message": success_message})
 
     @flask_app.post("/api/system/restart_service")

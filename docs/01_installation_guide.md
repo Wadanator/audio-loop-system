@@ -112,3 +112,13 @@ http://<rpi-ip>:8000
 Default login for the museum LAN install is `admin` / `admin12321`. Change `web.username` and `web.password` in `config.json` before handing the system to operators if the room needs a different password.
 
 The `Systém` tab can restart `audio_looper.service`, reboot the Raspberry Pi, or shut it down. `install.sh` writes a narrow `/etc/sudoers.d/audio-loop-system` rule for only the required reboot/shutdown commands; the service restart uses the user systemd unit and does not need sudo.
+## Dashboard Logs
+
+The `Logy` tab shows museum-style operational logs. It intentionally keeps the signal high:
+
+- `WARNING`, `ERROR`, and `CRITICAL` records are visible.
+- Dashboard manual actions are visible, including remote sound press and service/RPi power actions.
+- Routine physical button presses and normal playback chatter are not shown.
+- Recent logs are kept in memory and selected events are also persisted to `logs/dashboard_events.jsonl` with small rotation.
+
+The log view uses polling API endpoints instead of Socket.IO in this room dashboard. This keeps the audio room web stack simple while preserving the same visual and operational shape as `museum-system`.

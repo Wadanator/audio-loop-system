@@ -241,6 +241,14 @@ Expected result:
 
 ## Implementation log
 
+- `[implemented] 2026-07-01` - Museum-style dashboard logs added.
+  The audio dashboard now has a `Logy` view matching the museum-system layout,
+  with filters for Info/Warning/Error/Critical and a dark console surface.
+  Backend log capture keeps warning/error/critical records plus selected
+  `audio_loop.audit` INFO records for manual dashboard actions such as remote
+  sound press and restart/shutdown commands. The implementation uses polling
+  endpoints (`/api/logs`, `/api/logs/clear`, `/api/logs/export`) instead of
+  Socket.IO to keep this room dashboard lightweight.
 - `[implemented] 2026-07-01` - Backend auth and system actions wired.
   `/api/` routes now enforce Basic Auth when enabled in `config.json`, frontend
   login validates against the backend, and the System tab calls authenticated

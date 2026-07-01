@@ -58,6 +58,7 @@ Status timestamp: `[documented] 2026-06-30 17:37:20 +02:00`
 6. Runtime safety hardening - `[partially implemented] 2026-06-30 17:37:20 +02:00`
    - Overview degraded Modbus warning is implemented for one/both disconnected configured boxes.
    - Repeated Modbus/pymodbus/LED error logging is rate-limited to protect the Raspberry Pi SD card during long outages.
+   - Museum-style dashboard log view is implemented for warnings/errors/critical records and manual dashboard actions.
    - Test what happens when the Modbus box disconnects while audio is playing.
    - Ensure web/dashboard failure does not stop physical buttons or audio.
    - Ensure shutdown flushes stats and turns LEDs off best-effort.
@@ -67,6 +68,8 @@ Status timestamp: `[documented] 2026-06-30 17:37:20 +02:00`
    - Current state is now explicit: sound cards use one connection dot only, not separate INPUT/LED boxes.
    - Keep historical notes if useful, but make the current state obvious.
    - Keep this file updated whenever a final TODO is completed.
+
+- Dashboard log view is now implemented without Socket.IO; only consider Socket.IO later if other live views need it.
 
 ## Not urgent right now
 

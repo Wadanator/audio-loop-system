@@ -1,9 +1,10 @@
-import { Home, Landmark, Layers3, LogOut, Moon, Settings, Sun } from 'lucide-react';
+import { ClipboardList, Home, Landmark, Layers3, LogOut, Moon, Settings, Sun } from 'lucide-react';
 import Button from '../ui/Button.jsx';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Prehľad', icon: Home },
   { id: 'layers', label: 'Zvuky', icon: Layers3 },
+  { id: 'logs', label: 'Logy', icon: ClipboardList },
   { id: 'system', label: 'Systém', icon: Settings },
 ];
 
