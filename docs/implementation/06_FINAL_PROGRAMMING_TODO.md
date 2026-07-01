@@ -57,6 +57,7 @@ Status timestamp: `[documented] 2026-06-30 17:37:20 +02:00`
 
 6. Runtime safety hardening - `[partially implemented] 2026-06-30 17:37:20 +02:00`
    - Overview degraded Modbus warning is implemented for one/both disconnected configured boxes.
+   - Repeated Modbus/pymodbus/LED error logging is rate-limited to protect the Raspberry Pi SD card during long outages.
    - Test what happens when the Modbus box disconnects while audio is playing.
    - Ensure web/dashboard failure does not stop physical buttons or audio.
    - Ensure shutdown flushes stats and turns LEDs off best-effort.

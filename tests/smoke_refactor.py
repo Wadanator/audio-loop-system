@@ -7,6 +7,7 @@ stable while files move into packages.
 
 import importlib
 import json
+import logging
 from pathlib import Path
 import sys
 import tempfile
@@ -277,6 +278,58 @@ def test_stats_collector_replaces_existing_stats_file():
 
     assert saved["instrument_1"] == 2
 
+
+def test_pymodbus_log_filters_protect_disk_and_rate_limit_console():
+    logging_setup = importlib.import_module("audio_loop.infra.logging_setup")
+
+    drop_filter = logging_setup.SuppressLoggerBelowLevelFilter(
+        ("pymodbus",),
+        logging.CRITICAL,
+    )
+    pymodbus_error = logging.LogRecord(
+        "pymodbus.logging",
+        logging.ERROR,
+        __file__,
+        1,
+        "Connection to module failed",
+        (),
+        None,
+    )
+    pymodbus_critical = logging.LogRecord(
+        "pymodbus.logging",
+        logging.CRITICAL,
+        __file__,
+        1,
+        "Critical Modbus failure",
+        (),
+        None,
+    )
+    app_error = logging.LogRecord(
+        "audio_loop.app",
+        logging.ERROR,
+        __file__,
+        1,
+        "Application failure",
+        (),
+        None,
+    )
+
+    assert drop_filter.filter(pymodbus_error) is False
+    assert drop_filter.filter(pymodbus_critical) is True
+    assert drop_filter.filter(app_error) is True
+
+    now = [1000.0]
+    rate_filter = logging_setup.RateLimitedLogFilter(
+        600,
+        ("pymodbus",),
+        clock=lambda: now[0],
+    )
+
+    assert rate_filter.filter(pymodbus_error) is True
+    assert rate_filter.filter(pymodbus_error) is False
+    now[0] += 601
+    assert rate_filter.filter(pymodbus_error) is True
+
 def test_modbus_button_status_reports_debounced_input_state():
     modbus_panel = importlib.import_module("audio_loop.input.modbus_panel")
 
@@ -414,6 +467,7 @@ if __name__ == "__main__":
     test_config_module_loads_current_config()
     test_stats_collector_ignores_old_layer_keys()
     test_stats_collector_replaces_existing_stats_file()
+    test_pymodbus_log_filters_protect_disk_and_rate_limit_console()
     test_modbus_button_status_reports_debounced_input_state()
     test_dashboard_layers_payload_uses_live_input_and_led_state()
     test_looper_engine_toggles_layer_after_min_on_window()

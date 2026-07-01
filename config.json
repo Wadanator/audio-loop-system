@@ -25,6 +25,7 @@
     "poll_interval_ms": 50,
     "debounce_time_ms": 40,
     "min_press_duration_ms": 10,
+    "error_log_interval_seconds": 600,
     "modules": [
       {
         "name": "box_1",

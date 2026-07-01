@@ -39,6 +39,11 @@ final museum install.
 - `[pending]` - Hardware fault tests: disconnect Box 1 during playback, confirm
   audio continues, LED errors are logged, and reconnect resumes normal LED
   writes.
+- `[implemented, smoke verified] 2026-07-01` - Modbus logging was hardened
+  against long-term SD-card wear. `pymodbus` ERROR records are suppressed from
+  `critical_errors.log` unless they are CRITICAL, `pymodbus` console output is
+  rate-limited, and repeated Modbus/LED unavailable warnings now default to one
+  line per 600 seconds.
 ## Required degraded modes
 
 | Failure | Expected behavior |
@@ -121,7 +126,7 @@ final museum install.
      - first retry after 2 seconds
      - next retries after 5 seconds
      - after 5 consecutive failures, retry every 30 seconds
-     - log repeated failures at most once per minute
+     - log repeated failures at most once per 10 minutes by default
    - After reconnect, resync LED state from `LooperEngine` active layers.
 
 6. Atomic state snapshots
@@ -152,6 +157,8 @@ final museum install.
    - Avoid per-request web access logs.
    - Add one clear log line for each remote press and physical press.
    - Rate-limit repeated Modbus connection warnings.
+   - Do not write repeated third-party `pymodbus` connection errors to
+    `critical_errors.log`.
 
 ## Acceptance criteria
 

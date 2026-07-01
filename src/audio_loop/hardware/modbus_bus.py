@@ -60,6 +60,12 @@ class ModbusBus:
             raise RuntimeError("modbus_panel is not enabled")
 
         self.timeout = self.config.get("timeout_seconds", 2)
+        self.error_log_interval = float(
+            self.config.get(
+                "error_log_interval_seconds",
+                self.config.get("status_log_interval_seconds", 600),
+            )
+        )
         self.default_port = int(self.config.get("port", 4196))
         self.modules = self._build_modules()
         if not self.modules:
@@ -305,7 +311,10 @@ class ModbusBus:
         module.last_error = str(error)
 
         now = time.time()
-        if now - module.last_error_log_at >= 60 or module.failure_count == 1:
+        if (
+            now - module.last_error_log_at >= self.error_log_interval
+            or module.failure_count == 1
+        ):
             logger.warning(
                 "Modbus module %s unavailable (%s). Retrying in %ss.",
                 module.name,

@@ -5,8 +5,57 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 import os
+import threading
+import time
 
 from audio_loop.infra.paths import runtime_path
+
+
+class SuppressLoggerBelowLevelFilter(logging.Filter):
+    """Drop noisy third-party records below a severity threshold."""
+
+    def __init__(self, logger_prefixes, minimum_level):
+        super().__init__()
+        self.logger_prefixes = tuple(logger_prefixes)
+        self.minimum_level = int(minimum_level)
+
+    def filter(self, record):
+        if record.name.startswith(self.logger_prefixes):
+            return record.levelno >= self.minimum_level
+        return True
+
+
+class RateLimitedLogFilter(logging.Filter):
+    """Allow the first matching record, then suppress duplicates briefly."""
+
+    def __init__(self, min_interval_seconds, logger_prefixes, clock=None):
+        super().__init__()
+        self.min_interval_seconds = float(min_interval_seconds)
+        self.logger_prefixes = tuple(logger_prefixes)
+        self.clock = clock or time.monotonic
+        self._last_emit_at = {}
+        self._lock = threading.Lock()
+
+    def filter(self, record):
+        if not record.name.startswith(self.logger_prefixes):
+            return True
+
+        key = (record.name, record.levelno, record.getMessage())
+        now = self.clock()
+        with self._lock:
+            last_emit_at = self._last_emit_at.get(key)
+            if last_emit_at is None or now - last_emit_at >= self.min_interval_seconds:
+                self._last_emit_at[key] = now
+                return True
+        return False
+
+
+def _pymodbus_log_interval_seconds():
+    raw_value = os.environ.get("AUDIO_LOOP_PYMODBUS_LOG_INTERVAL_SECONDS", "600")
+    try:
+        return max(1.0, float(raw_value))
+    except ValueError:
+        return 600.0
 
 
 def setup_logging():
@@ -39,12 +88,21 @@ def setup_logging():
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
     )
+    file_handler.addFilter(
+        SuppressLoggerBelowLevelFilter(("pymodbus",), logging.CRITICAL)
+    )
 
     # STDOUT handler: systemd/journald captures these without writing to SD.
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.INFO)
     stdout_handler.setFormatter(
         logging.Formatter('%(levelname)s: %(name)s - %(message)s')
+    )
+    stdout_handler.addFilter(
+        RateLimitedLogFilter(
+            _pymodbus_log_interval_seconds(),
+            ("pymodbus",),
+        )
     )
 
     # Configure the root logger.
@@ -65,6 +123,8 @@ def setup_logging():
     logging.getLogger('audio_loop.core.looper_engine').setLevel(logging.WARNING)
     logging.getLogger('stats_collector').setLevel(logging.INFO)
     logging.getLogger('audio_loop.stats.collector').setLevel(logging.INFO)
+    logging.getLogger('pymodbus').setLevel(logging.WARNING)
+    logging.getLogger('pymodbus.logging').setLevel(logging.WARNING)
 
     logging.info(
         "Logging setup complete - ERROR -> file (SD card), INFO+ -> stdout (journald)"

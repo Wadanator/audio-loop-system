@@ -37,6 +37,10 @@ class ModbusLedController:
         self.last_output_state: Dict[int, bool] = {}
         self.last_error: Optional[str] = None
         self.last_error_at: float = 0.0
+        self.last_error_log_at: float = 0.0
+        self.error_log_interval = float(
+            config.get("modbus_panel", {}).get("error_log_interval_seconds", 600)
+        )
 
     def start(self):
         """Start the background LED worker and clear all configured LEDs."""
@@ -182,6 +186,13 @@ class ModbusLedController:
         )
 
     def _record_error(self, message: str):
+        previous_error = self.last_error
         self.last_error = message
-        self.last_error_at = time.time()
-        logger.warning("Modbus LED update failed: %s", message)
+        now = time.time()
+        self.last_error_at = now
+        if (
+            message != previous_error
+            or now - self.last_error_log_at >= self.error_log_interval
+        ):
+            logger.warning("Modbus LED update failed: %s", message)
+            self.last_error_log_at = now
